@@ -6,18 +6,20 @@
 
 | 文件 | 运行器 | 产物 | 触发方式 |
 | --- | --- | --- | --- |
-| [build-packages.yml](file:///Users/yubiao/Develop/github_home/restaurant-ordering-system/.github/workflows/build-packages.yml) | `macos-latest` + `windows-latest`（矩阵，并行） | `restaurant-ordering-system-macos.zip`、`restaurant-ordering-system-windows.zip` | 手动 `workflow_dispatch`；推送 `v*` tag |
+| [build-packages.yml](file:///Users/yubiao/Develop/github_home/restaurant-ordering-system/.github/workflows/build-packages.yml) | `macos-latest`、`windows-latest`（双 job 并行） | `restaurant-ordering-system-macos.zip`、`restaurant-ordering-system-windows.zip` | 手动 `workflow_dispatch`；推送 `v*` tag |
 
 ## 为什么必须分平台构建
 
-PyInstaller 不支持交叉编译：可执行文件的引导程序与 Python 运行时都是平台相关的二进制，无法在 macOS 上生成 `.exe`，反之亦然。因此工作流采用矩阵策略，两个平台各自在原生运行器上执行对应的打包脚本：
+PyInstaller 不支持交叉编译：可执行文件的引导程序与 Python 运行时都是平台相关的二进制，无法在 macOS 上生成 `.exe`，反之亦然。因此工作流拆成两个 job，各自在原生运行器上执行对应的打包脚本：
 
 | 平台 | 运行器 | 脚本 | 产物 |
 | --- | --- | --- | --- |
 | macOS（arm64） | `macos-latest` | `bash scripts/build.sh` | `dist/restaurant-ordering-system-macos.zip` |
 | Windows（x64） | `windows-latest` | `scripts\build.bat` | `dist/restaurant-ordering-system-windows.zip` |
 
-矩阵采用 `fail-fast: false`，单个平台失败不会取消另一个平台。
+两个 job 相互独立、并行执行，单个平台失败不会影响另一个平台。
+
+> 不使用 `matrix` 的原因：GitHub Actions 的 `shell` 键不接受表达式，`matrix` 上下文在该处不可用，会报 `Unrecognized named-value: 'matrix'`。拆成两个 job 后 `shell` 保持为字面量。
 
 ## 与本地构建的差异
 
