@@ -6,16 +6,25 @@
 
 | 文件 | 运行器 | 产物 | 触发方式 |
 | --- | --- | --- | --- |
-| [build-windows.yml](file:///Users/yubiao/Develop/github_home/restaurant-ordering-system/.github/workflows/build-windows.yml) | `windows-latest` | `restaurant-ordering-system-windows.zip` | 手动 `workflow_dispatch`；推送 `v*` tag |
+| [build-packages.yml](file:///Users/yubiao/Develop/github_home/restaurant-ordering-system/.github/workflows/build-packages.yml) | `macos-latest` + `windows-latest`（矩阵，并行） | `restaurant-ordering-system-macos.zip`、`restaurant-ordering-system-windows.zip` | 手动 `workflow_dispatch`；推送 `v*` tag |
 
-## 为什么 Windows 包只能由 CI 产出
+## 为什么必须分平台构建
 
-PyInstaller 不支持交叉编译：`.exe` 的引导程序与 Python 运行时都是平台相关的二进制，无法在 macOS 上生成。因此 Windows 产物必须交由 `windows-latest` 运行器执行 [scripts/build.bat](file:///Users/yubiao/Develop/github_home/restaurant-ordering-system/scripts/build.bat) 产出。
+PyInstaller 不支持交叉编译：可执行文件的引导程序与 Python 运行时都是平台相关的二进制，无法在 macOS 上生成 `.exe`，反之亦然。因此工作流采用矩阵策略，两个平台各自在原生运行器上执行对应的打包脚本：
 
-macOS 包可直接在本机执行 `bash scripts/build.sh` 生成，无需上 CI。
+| 平台 | 运行器 | 脚本 | 产物 |
+| --- | --- | --- | --- |
+| macOS（arm64） | `macos-latest` | `bash scripts/build.sh` | `dist/restaurant-ordering-system-macos.zip` |
+| Windows（x64） | `windows-latest` | `scripts\build.bat` | `dist/restaurant-ordering-system-windows.zip` |
+
+矩阵采用 `fail-fast: false`，单个平台失败不会取消另一个平台。
 
 ## 与本地构建的差异
 
-- 运行器上不存在 `backend/.venv`，`build.bat` 会自动回退到 `setup-python` 提供的 `python`；
+- 运行器上不存在 `backend/.venv`，脚本会自动回退到 `setup-python` 提供的解释器；
 - 依赖由 `pip install -r backend/requirements.txt` 安装，与本地同一份锁定版本；
 - 产物通过 `actions/upload-artifact` 上传，在 Actions 运行详情页下载，默认保留 30 天。
+
+## 备注
+
+`macos-latest` 当前指向 Apple Silicon（arm64）运行器，产物为 arm64 架构。若需同时支持 Intel Mac，可在矩阵中追加 `macos-13`（x86_64）并把产物名区分为 `-macos-x64.zip`。

@@ -1,0 +1,79 @@
+# ============================================================================
+# build-packages.yml —— GitHub Actions 工作流：并行构建 macOS 与 Windows 分发包
+# build-packages.yml -- Build the macOS and Windows packages in parallel
+#
+# 为什么必须分平台构建 / Why build per platform:
+#   PyInstaller 不支持交叉编译，引导程序与 Python 运行时均与平台绑定，
+#   因此 macOS 产物必须由 macos-latest 产出，Windows 产物必须由 windows-latest 产出。
+#   PyInstaller cannot cross-compile: both the bootloader and the Python runtime
+#   are platform specific, so each artifact must be built on its own runner.
+#
+# 产物 / Artifacts:
+#   - restaurant-ordering-system-macos.zip    （macOS，arm64）
+#   - restaurant-ordering-system-windows.zip  （Windows，x64）
+# ============================================================================
+name: Build Packages
+
+# 触发方式 / Triggers:
+#   - workflow_dispatch：在 Actions 页面手动点击运行
+#     workflow_dispatch: run manually from the Actions tab
+#   - push tags v*：打 tag 时自动出包
+#     push tags v*: build automatically when a version tag is pushed
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }} package
+    # 每个平台在各自的运行器上构建 / Each platform builds on its own runner
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      # 单个平台失败不取消另一个平台 / Do not cancel the other platform on failure
+      fail-fast: false
+      matrix:
+        include:
+          # macOS：脚本产物名 -macos.zip / macOS: script emits the -macos.zip
+          - name: macos
+            os: macos-latest
+            shell: bash
+            script: bash scripts/build.sh
+          # Windows：脚本产物名 -windows.zip / Windows: script emits the -windows.zip
+          - name: windows
+            os: windows-latest
+            shell: cmd
+            script: scripts\build.bat
+
+    steps:
+      # 拉取源码 / Check out the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 安装与本地一致的 Python 版本 / Install the same Python version as local
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      # 安装运行与打包依赖 / Install runtime and packaging dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      # 执行该平台的一键打包脚本 / Run the platform packaging script
+      - name: Build package
+        shell: ${{ matrix.shell }}
+        run: ${{ matrix.script }}
+
+      # 上传该平台的分发包 / Upload this platform's distribution package
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: restaurant-ordering-system-${{ matrix.name }}
+          path: dist/restaurant-ordering-system-${{ matrix.name }}.zip
+          if-no-files-found: error
+          retention-days: 30
