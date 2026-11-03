@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>营业统计 - 餐饮小店点菜系统</title>
+  <link rel="stylesheet" href="/static/css/base.css">
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/common.js"></script>
+  <style>
+    /* 页面外壳 / Page shell */
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* 顶部导航 / Top navigation */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      padding: var(--space-3) var(--space-5);
+      background: var(--color-bg);
+      color: var(--color-text-inverse);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .topbar .brand {
+      font-size: 18px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .topbar .nav {
+      display: flex;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
+
+    .topbar .nav a {
+      color: var(--color-text-inverse);
+      text-decoration: none;
+      padding: 6px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 15px;
+      opacity: 0.78;
+      transition: background 0.15s ease, opacity 0.15s ease;
+    }
+
+    .topbar .nav a:hover {
+      background: rgba(255, 255, 255, 0.12);
+      opacity: 1;
+    }
+
+    .topbar .nav a.active {
+      background: var(--color-primary);
+      opacity: 1;
+    }
+
+    .topbar .spacer {
+      flex: 1 1 auto;
+    }
+
+    /* 主区域 / Main area */
+    .main {
+      flex: 1 1 auto;
+      padding: var(--space-5);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-5);
+      max-width: 1280px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* 区间切换 / Range switcher */
+    .range-bar {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      flex-wrap: wrap;
+    }
+
+    .range-tabs {
+      display: flex;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
+
+    .range-tab {
+      padding: 8px 18px;
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-pill);
+      background: var(--color-surface-2);
+      color: var(--color-text);
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .range-tab:hover {
+      border-color: var(--color-primary);
+    }
+
+    .range-tab.active {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      color: #fff;
+    }
+
+    .custom-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .custom-row .input {
+      width: auto;
+    }
+
+    .range-hint {
+      margin-left: auto;
+      color: var(--color-text-muted);
+      font-size: 13px;
+    }
+
+    /* 指标卡 / Metric cards */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-4);
+    }
+
+    .metric-label {
+      color: var(--color-text-muted);
+      font-size: 14px;
+    }
+
+    .metric-value {
+      margin-top: var(--space-2);
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--color-primary);
+    }
+
+    /* 双栏 / Two columns */
+    .two-col {
+      display: grid;
+      grid-template-columns: 3fr 2fr;
+      gap: var(--space-4);
+      align-items: start;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: var(--space-4);
+    }
+
+    /* 趋势图 / Trend chart */
+    .chart {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .chart-axis {
+      stroke: var(--color-border-light);
+      stroke-width: 1;
+    }
+
+    .chart-line {
+      fill: none;
+      stroke: var(--color-primary);
+      stroke-width: 2;
+      stroke-linejoin: round;
+    }
+
+    .chart-dot {
+      fill: var(--color-primary);
+    }
+
+    .chart-text {
+      font-size: 11px;
+      fill: var(--color-text-muted);
+    }
+
+    /* 移动端 / Mobile */
+    @media (max-width: 960px) {
+      .metric-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .two-col {
+        grid-template-columns: 1fr;
+      }
+
+      .range-hint {
+        margin-left: 0;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <!-- 顶部导航 / Top navigation -->
+    <header class="topbar">
+      <div class="brand">{{ shopName }}</div>
+      <nav class="nav">
+        <a href="/counter">柜台点菜</a>
+        <a href="/kitchen">厨房看板</a>
+        <a href="/stats" class="active">营业统计</a>
+        <a href="/admin">菜品管理</a>
+        <a href="/settings">系统设置</a>
+      </nav>
+      <div class="spacer"></div>
+    </header>
+
+    <main class="main">
+      <!-- 区间切换 / Range switcher -->
+      <section class="card range-bar">
+        <div class="range-tabs">
+          <button
+            v-for="opt in rangeOptions"
+            :key="opt.value"
+            class="range-tab"
+            :class="{ active: range === opt.value }"
+            @click="selectRange(opt.value)"
+          >{{ opt.label }}</button>
+        </div>
+        <div class="custom-row" v-if="range === 'custom'">
+          <input type="date" class="input" v-model="customStart">
+          <span>至</span>
+          <input type="date" class="input" v-model="customEnd">
+          <button class="btn primary" @click="loadStats">查询</button>
+        </div>
+        <div class="range-hint">{{ startDate }} ~ {{ endDate }}</div>
+      </section>
+
+      <!-- 指标卡 / Metric cards -->
+      <section class="metric-grid">
+        <div class="card">
+          <div class="metric-label">营业额</div>
+          <div class="metric-value">¥{{ formatMoney(stats.totalAmount) }}</div>
+        </div>
+        <div class="card">
+          <div class="metric-label">已结账单数</div>
+          <div class="metric-value">{{ stats.orderCount }}</div>
+        </div>
+        <div class="card">
+          <div class="metric-label">客单价</div>
+          <div class="metric-value">{{ averageText }}</div>
+        </div>
+      </section>
+
+      <!-- 趋势图与排行 / Trend chart and ranking -->
+      <section class="two-col">
+        <div class="card">
+          <div class="card-title">每日营业额</div>
+          <div v-if="chart.dots.length">
+            <svg class="chart" :viewBox="'0 0 ' + chart.width + ' ' + chart.height" preserveAspectRatio="xMidYMid meet">
+              <!-- 基线 / Baseline -->
+              <line
+                class="chart-axis"
+                :x1="chart.padLeft"
+                :y1="chart.baseY"
+                :x2="chart.width - chart.padRight"
+                :y2="chart.baseY"
+              ></line>
+              <!-- 折线 / Polyline -->
+              <polyline class="chart-line" :points="chart.points"></polyline>
+              <!-- 数据点 / Data points -->
+              <circle
+                v-for="dot in chart.dots"
+                :key="dot.date"
+                class="chart-dot"
+                :cx="dot.x"
+                :cy="dot.y"
+                r="3"
+              >
+                <title>{{ dot.date }}：¥{{ formatMoney(dot.amount) }}（{{ dot.orderCount }} 单）</title>
+              </circle>
+              <!-- X 轴标签 / X-axis labels -->
+              <text
+                v-for="label in chart.labels"
+                :key="'label-' + label.date"
+                class="chart-text"
+                :x="label.x"
+                :y="chart.height - 12"
+                text-anchor="middle"
+              >{{ label.label }}</text>
+            </svg>
+          </div>
+          <div v-else class="empty">暂无数据</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">菜品销量排行</div>
+          <table class="table" v-if="topDishes.length">
+            <thead>
+              <tr>
+                <th style="width: 56px">名次</th>
+                <th>菜品</th>
+                <th style="width: 72px">份数</th>
+                <th style="width: 110px">金额</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, index) in topDishes" :key="row.dishId">
+                <td>{{ index + 1 }}</td>
+                <td>{{ row.dishName }}</td>
+                <td>{{ row.quantity }}</td>
+                <td>¥{{ formatMoney(row.amount) }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-else class="empty">暂无数据</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    /* 营业统计页 / Revenue statistics page */
+    (function () {
+      "use strict";
+
+      /**
+       * 把 Date 格式化为 YYYY-MM-DD
+       * Format a Date as YYYY-MM-DD.
+       * @param {Date} date 日期对象 / date object
+       * @returns {string} 格式化结果 / formatted result
+       */
+      function toDateInput(date) {
+        function pad(n) {
+          return n < 10 ? "0" + n : String(n);
+        }
+        return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate());
+      }
+
+      /**
+       * 计算趋势图几何数据
+       * Compute the geometry of the trend chart.
+       * @param {Array} daily 每日数据 / daily rows
+       * @returns {object} 图表几何数据 / chart geometry
+       */
+      function buildChart(daily) {
+        var width = 720;
+        var height = 240;
+        var padLeft = 44;
+        var padRight = 16;
+        var padTop = 16;
+        var padBottom = 32;
+        var innerWidth = width - padLeft - padRight;
+        var innerHeight = height - padTop - padBottom;
+        var baseY = padTop + innerHeight;
+        var rows = daily || [];
+        var count = rows.length;
+
+        if (!count) {
+          return {
+            width: width, height: height,
+            padLeft: padLeft, padRight: padRight, baseY: baseY,
+            points: "", dots: [], labels: []
+          };
+        }
+
+        var maxValue = 0;
+        rows.forEach(function (row) {
+          var value = Number(row.amount) || 0;
+          if (value > maxValue) {
+            maxValue = value;
+          }
+        });
+
+        var step = count > 1 ? innerWidth / (count - 1) : 0;
+        var labelStep = count > 14 ? Math.ceil(count / 7) : 1;
+
+        var dots = rows.map(function (row, index) {
+          var value = Number(row.amount) || 0;
+          var ratio = maxValue > 0 ? value / maxValue : 0;
+          var x = count > 1 ? padLeft + index * step : padLeft + innerWidth / 2;
+          var y = baseY - ratio * innerHeight;
+          return {
+            date: row.date,
+            amount: row.amount,
+            orderCount: row.orderCount,
+            label: row.date.slice(5),
+            x: Number(x.toFixed(1)),
+            y: Number(y.toFixed(1)),
+            showLabel: index % labelStep === 0 || index === count - 1
+          };
+        });
+
+        // 预过滤出需要标注的 X 轴标签，避免模板里 v-for 与 v-if 同元素
+        // Pre-filter the x-axis labels so the template never puts v-for and v-if on one node
+        var labels = dots.filter(function (dot) {
+          return dot.showLabel;
+        });
+
+        return {
+          width: width,
+          height: height,
+          padLeft: padLeft,
+          padRight: padRight,
+          baseY: baseY,
+          points: dots.map(function (dot) {
+            return dot.x + "," + dot.y;
+          }).join(" "),
+          dots: dots,
+          labels: labels
+        };
+      }
+
+      var app = Vue.createApp({
+        data: function () {
+          return {
+            // 店名 / Shop name
+            shopName: "餐饮小店",
+            // 当前区间 / Active range
+            range: "today",
+            // 区间选项 / Range options
+            rangeOptions: [
+              { value: "today", label: "今日" },
+              { value: "7d", label: "近 7 天" },
+              { value: "30d", label: "近 30 天" },
+              { value: "custom", label: "自定义" }
+            ],
+            // 自定义起始日期 / Custom start date
+            customStart: toDateInput(new Date(Date.now() - 6 * 24 * 3600 * 1000)),
+            // 自定义结束日期 / Custom end date
+            customEnd: toDateInput(new Date()),
+            // 统计结果 / Statistics result
+            stats: {
+              range: "today",
+              startDate: "",
+              endDate: "",
+              totalAmount: "0.00",
+              orderCount: 0,
+              averageAmount: null,
+              daily: [],
+              topDishes: []
+            }
+          };
+        },
+        computed: {
+          /**
+           * 已加载统计的起止日期
+           * Start and end dates of the loaded statistics.
+           * @returns {string} 展示用起止日期 / display date span
+           */
+          startDate: function () {
+            return this.stats.startDate || "-";
+          },
+          /**
+           * 已加载统计的结束日期
+           * End date of the loaded statistics.
+           * @returns {string} 展示用结束日期 / display end date
+           */
+          endDate: function () {
+            return this.stats.endDate || "-";
+          },
+          /**
+           * 客单价展示文案
+           * Display text of the average order value.
+           * @returns {string} 文案 / text
+           */
+          averageText: function () {
+            if (this.stats.averageAmount === null || this.stats.averageAmount === undefined) {
+              return "—";
+            }
+            return "¥" + this.formatMoney(this.stats.averageAmount);
+          },
+          /**
+           * 趋势图几何数据
+           * Geometry of the trend chart.
+           * @returns {object} 图表几何数据 / chart geometry
+           */
+          chart: function () {
+            return buildChart(this.stats.daily);
+          },
+          /**
+           * 菜品排行
+           * Dish ranking.
+           * @returns {Array} 排行列表 / ranking list
+           */
+          topDishes: function () {
+            return this.stats.topDishes || [];
+          }
+        },
+        methods: {
+          /**
+           * 金额格式化（元，两位小数）
+           * Format a money value (yuan, two decimals).
+           * @param {string|number} value 金额 / amount
+           * @returns {string} 格式化结果 / formatted result
+           */
+          formatMoney: function (value) {
+            return ROS.formatMoney(value);
+          },
+          /**
+           * 切换区间并重新拉取数据
+           * Switch the range and reload the statistics.
+           * @param {string} value 区间标识 / range identifier
+           */
+          selectRange: function (value) {
+            this.range = value;
+            this.loadStats();
+          },
+          /**
+           * 拉取营业统计数据
+           * Load the revenue statistics.
+           */
+          loadStats: function () {
+            var self = this;
+            var params = { range: this.range };
+            if (this.range === "custom") {
+              if (!this.customStart || !this.customEnd) {
+                ROS.toast("请选择起止日期", "warning");
+                return;
+              }
+              if (this.customStart > this.customEnd) {
+                ROS.toast("起始日期不能晚于结束日期", "warning");
+                return;
+              }
+              params.start = this.customStart;
+              params.end = this.customEnd;
+            }
+            return ROS.get("/api/stats/revenue", params)
+              .then(function (data) {
+                if (data) {
+                  self.stats = data;
+                }
+              })
+              .catch(function (error) {
+                ROS.toast(error.message || "统计数据加载失败", "error");
+              });
+          },
+          /**
+           * 拉取店名
+           * Load the shop name.
+           */
+          loadShopName: function () {
+            var self = this;
+            return ROS.get("/api/settings")
+              .then(function (data) {
+                if (data && data.shopName) {
+                  self.shopName = data.shopName;
+                }
+              })
+              .catch(function () {
+                // 店名加载失败不影响统计展示 / Shop-name failures must not block the page
+              });
+          }
+        },
+        mounted: function () {
+          this.loadShopName();
+          this.loadStats();
+        }
+      });
+
+      app.mount("#app");
+    })();
+  </script>
+</body>
+</html>

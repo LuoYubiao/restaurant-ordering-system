@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>系统设置 - 餐饮小店点菜系统</title>
+  <!-- 基础设计系统 / Base design system -->
+  <link rel="stylesheet" href="/static/css/base.css">
+  <!-- 离线第三方库与共享脚本（顺序不可变）/ Offline vendor lib and shared scripts (order matters) -->
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/sse.js"></script>
+  <script src="/static/js/common.js"></script>
+  <style>
+    /* ==========================================================================
+     * 系统设置页专属样式（复用 base.css 的设计令牌）
+     * Page-specific styles for the system settings page.
+     * ========================================================================== */
+
+    /* 整页骨架 / Full-height shell */
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      background: var(--color-surface);
+    }
+
+    /* 顶部导航 / Top navigation */
+    .topbar {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      padding: var(--space-3) var(--space-5);
+      background: var(--color-bg);
+      color: var(--color-text-inverse);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .topbar .brand {
+      font-size: 18px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .topbar .nav {
+      display: flex;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
+
+    .topbar .nav a {
+      color: var(--color-text-inverse);
+      text-decoration: none;
+      padding: 6px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 15px;
+      opacity: 0.78;
+      transition: background 0.15s ease, opacity 0.15s ease;
+    }
+
+    .topbar .nav a:hover {
+      background: rgba(255, 255, 255, 0.12);
+      opacity: 1;
+    }
+
+    .topbar .nav a.active {
+      background: var(--color-primary);
+      opacity: 1;
+    }
+
+    .topbar .spacer {
+      flex: 1 1 auto;
+    }
+
+    /* 主区域 / Main content */
+    .main {
+      flex: 1 1 auto;
+      width: 100%;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: var(--space-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    /* 卡片区块 / Section card */
+    .section {
+      background: var(--color-surface-2);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      padding: var(--space-5);
+    }
+
+    .section-title {
+      margin: 0 0 var(--space-2);
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .section-sub {
+      margin: 0 0 var(--space-4);
+      font-size: 13px;
+      color: var(--color-text-muted);
+    }
+
+    /* 表单字段 / Form field */
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: var(--space-4);
+      max-width: 420px;
+    }
+
+    .field-label {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .desc {
+      font-size: 12px;
+      color: var(--color-text-muted);
+      line-height: 1.5;
+    }
+
+    /* 单选组 / Radio group */
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      margin-bottom: var(--space-3);
+    }
+
+    .radio-option {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-2);
+      padding: var(--space-3);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+    }
+
+    .radio-option.active {
+      border-color: var(--color-primary);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .radio-option input {
+      margin-top: 3px;
+    }
+
+    .radio-main {
+      font-weight: 600;
+    }
+
+    /* 行内单选（纸张宽度）/ Inline radio (paper width) */
+    .inline-radio {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+    }
+
+    /* 内联字段行 / Inline field rows */
+    .field-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      margin-bottom: var(--space-3);
+    }
+
+    .field-row .field {
+      flex: 1 1 180px;
+      margin-bottom: 0;
+    }
+
+    /* 开关行 / Switch rows */
+    .switch-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-bottom: var(--space-2);
+      font-size: 14px;
+    }
+
+    /* 警示条（模拟打印）/ Warning bar for mock printing */
+    .warn-bar {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border-left: 4px solid var(--color-warning);
+      border-radius: var(--radius-md);
+      background: #fff4e0;
+      color: #7a4a00;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    /* 保存结果提示 / Save result banner */
+    .save-banner {
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 600;
+      margin-top: var(--space-3);
+    }
+
+    .save-banner.ok {
+      background: #e7f6ea;
+      color: #1f7a34;
+      border-left: 4px solid var(--color-success);
+    }
+
+    .save-banner.warn {
+      background: #fff4e0;
+      color: #7a4a00;
+      border-left: 4px solid var(--color-warning);
+    }
+
+    /* 测试打印结果区 / Test print result box */
+    .test-result {
+      margin-top: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .test-result.ok {
+      background: #e7f6ea;
+      color: #1f7a34;
+      border-left: 4px solid var(--color-success);
+    }
+
+    .test-result.fail {
+      background: #fdecec;
+      color: #a02020;
+      border-left: 4px solid var(--color-danger);
+    }
+
+    .test-result .tr-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    /* 访问地址 / Access URLs */
+    .url-block {
+      margin-bottom: var(--space-4);
+    }
+
+    .url-block-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: var(--space-2);
+    }
+
+    .url-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) 0;
+      border-bottom: 1px dashed var(--color-border-light);
+    }
+
+    .url-label {
+      flex: 0 0 84px;
+      font-size: 13px;
+      color: var(--color-text-muted);
+    }
+
+    .url-text {
+      flex: 1 1 auto;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      word-break: break-all;
+    }
+
+    /* 运行状态列表 / Runtime status list */
+    .status-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .status-row {
+      display: flex;
+      gap: var(--space-3);
+      font-size: 14px;
+    }
+
+    .status-row .k {
+      flex: 0 0 110px;
+      color: var(--color-text-muted);
+    }
+
+    .status-row .v {
+      flex: 1 1 auto;
+      font-family: var(--font-mono);
+      word-break: break-all;
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Vue 挂载点 / Vue mount point -->
+  <div id="app" class="app-shell">
+    <!-- 顶部导航 / Top navigation -->
+    <header class="topbar">
+      <div class="brand">{{ displayShopName }}</div>
+      <nav class="nav">
+        <a href="/counter">柜台点菜</a>
+        <a href="/kitchen">厨房看板</a>
+        <a href="/stats">营业统计</a>
+        <a href="/admin">菜品管理</a>
+        <a href="/settings" class="active">系统设置</a>
+      </nav>
+      <div class="spacer"></div>
+    </header>
+
+    <main class="main">
+      <!-- 模拟打印警示条 / Mock-printing warning bar -->
+      <div class="warn-bar" v-if="status && status.isMockPrinter">
+        <span>当前为模拟打印模式，未连接真实打印机，小票仅保存为文本文件</span>
+      </div>
+
+      <!-- 店铺信息 / Shop info -->
+      <section class="section">
+        <h2 class="section-title">店铺信息</h2>
+        <p class="section-sub">店名会显示在小票抬头，修改后立即生效。</p>
+        <label class="field">
+          <span class="field-label">店铺名称</span>
+          <input class="input" v-model.trim="form.shopName" placeholder="如 我的小店" maxlength="32" />
+          <span class="desc">最长 32 个字符，留空无法保存。</span>
+        </label>
+      </section>
+
+      <!-- 打印机配置 / Printer config -->
+      <section class="section">
+        <h2 class="section-title">打印机配置</h2>
+        <p class="section-sub">选择小票的打印方式。没有真实打印机时，建议先用「模拟打印」试用系统。</p>
+
+        <div class="radio-group">
+          <label class="radio-option" :class="{ active: form.printer.mode === 'mock' }">
+            <input type="radio" value="mock" v-model="form.printer.mode" />
+            <span>
+              <span class="radio-main">模拟打印（未连接打印机）</span>
+              <span class="desc" style="display: block;">
+                小票会以文本形式保存到 printed/ 目录，方便先试用系统
+              </span>
+            </span>
+          </label>
+
+          <label class="radio-option" :class="{ active: form.printer.mode === 'network' }">
+            <input type="radio" value="network" v-model="form.printer.mode" />
+            <span>
+              <span class="radio-main">网络打印机</span>
+              <span class="desc" style="display: block;">
+                通过网线或 WiFi 连接的网口小票打印机（IP 直连）
+              </span>
+            </span>
+          </label>
+
+          <label class="radio-option" :class="{ active: form.printer.mode === 'usb' }">
+            <input type="radio" value="usb" v-model="form.printer.mode" />
+            <span>
+              <span class="radio-main">USB 打印机</span>
+              <span class="desc" style="display: block;">
+                通过 USB 线连接的小票打印机
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <!-- 网口参数 / Network params -->
+        <div class="field-row" v-if="form.printer.mode === 'network'">
+          <label class="field">
+            <span class="field-label">打印机 IP / 主机名</span>
+            <input class="input" v-model.trim="form.printer.host" placeholder="如 192.168.1.200" />
+          </label>
+          <label class="field">
+            <span class="field-label">端口</span>
+            <input class="input" type="number" v-model.number="form.printer.port" placeholder="9100" />
+          </label>
+        </div>
+
+        <!-- USB 参数 / USB params -->
+        <div class="field-row" v-if="form.printer.mode === 'usb'">
+          <label class="field">
+            <span class="field-label">USB 厂商 ID（正整数）</span>
+            <input class="input" type="number" v-model.number="form.printer.usbVendorId" placeholder="如 10473" />
+          </label>
+          <label class="field">
+            <span class="field-label">USB 产品 ID（正整数）</span>
+            <input class="input" type="number" v-model.number="form.printer.usbProductId" placeholder="如 649" />
+          </label>
+        </div>
+
+        <!-- 纸张宽度 / Paper width -->
+        <div class="field">
+          <span class="field-label">纸张宽度</span>
+          <div class="row gap-3">
+            <label class="inline-radio">
+              <input type="radio" :value="58" v-model.number="form.printer.paperWidth" /> 58mm
+            </label>
+            <label class="inline-radio">
+              <input type="radio" :value="80" v-model.number="form.printer.paperWidth" /> 80mm
+            </label>
+          </div>
+          <span class="desc">常见小票机为 58mm，宽版为 80mm。</span>
+        </div>
+
+        <!-- 打印开关 / Print switches -->
+        <div class="field">
+          <span class="field-label">下单后自动打印</span>
+          <div class="switch-row">
+            <input id="sw-counter" type="checkbox" v-model="form.printCounterTicket" />
+            <label for="sw-counter">打印「柜台单」（给收银 / 顾客）</label>
+          </div>
+          <div class="switch-row">
+            <input id="sw-kitchen" type="checkbox" v-model="form.printKitchenTicket" />
+            <label for="sw-kitchen">打印「厨房单」（给后厨）</label>
+          </div>
+        </div>
+
+        <!-- 测试打印 / Test print -->
+        <div class="row gap-3" style="flex-wrap: wrap;">
+          <button class="btn ghost" :disabled="testing" @click="testPrint">
+            {{ testing ? '测试中…' : '测试打印' }}
+          </button>
+          <span class="desc" style="align-self: center;">
+            会按当前配置打印一张测试小票，用于确认打印机是否可用
+          </span>
+        </div>
+
+        <div class="test-result" :class="testResult.ok ? 'ok' : 'fail'" v-if="testResult.show">
+          <div class="tr-title">{{ testResult.ok ? '测试打印成功' : '测试打印失败' }}</div>
+          <div>{{ testResult.message }}</div>
+          <div v-if="!testResult.ok" style="margin-top: 6px;">
+            排查建议：确认打印机已开机、纸张已装好、与本机在同一网络或 USB 已连接；
+            网络打印请核对 IP 与端口（常见 9100）。
+          </div>
+        </div>
+
+        <button class="btn primary" :disabled="saving" style="margin-top: var(--space-4);" @click="save">
+          {{ saving ? '保存中…' : '保存设置' }}
+        </button>
+
+        <div
+          class="save-banner"
+          :class="saveResult.restartRequired ? 'warn' : 'ok'"
+          v-if="saveResult.show"
+        >{{ saveResult.message }}</div>
+      </section>
+
+      <!-- 服务与访问地址 / Service and access URLs -->
+      <section class="section">
+        <h2 class="section-title">服务与访问地址</h2>
+        <p class="section-sub">端口修改后需重启程序才会生效；地址会随端口自动更新。</p>
+
+        <label class="field">
+          <span class="field-label">服务端口</span>
+          <input class="input" type="number" v-model.number="form.serverPort" placeholder="8000" />
+          <span class="desc">取值范围 1024 - 65535，需重启程序生效。</span>
+        </label>
+
+        <!-- 本机访问 / Localhost access -->
+        <div class="url-block">
+          <div class="url-block-title">本机访问（在这台电脑上打开）</div>
+          <div class="url-row" v-for="item in localUrlList" :key="item.key">
+            <span class="url-label">{{ item.label }}</span>
+            <span class="url-text">{{ item.url }}</span>
+            <button class="btn ghost btn-sm" @click="copy(item.url, item.label)">复制</button>
+          </div>
+        </div>
+
+        <!-- 局域网访问 / LAN access -->
+        <div class="url-block">
+          <div class="url-block-title">局域网内设备访问（厨房平板 / 手机）</div>
+          <p class="desc" style="margin-bottom: var(--space-3);">
+            厨房平板连同一个 WiFi，在浏览器里输入下面这个地址
+          </p>
+          <div class="url-row">
+            <span class="url-label">厨房看板</span>
+            <span class="url-text">{{ lanUrls.kitchen }}</span>
+            <button class="btn ghost btn-sm" @click="copy(lanUrls.kitchen, '厨房看板')">复制</button>
+          </div>
+          <div class="url-row">
+            <span class="url-label">柜台点菜</span>
+            <span class="url-text">{{ lanUrls.counter }}</span>
+            <button class="btn ghost btn-sm" @click="copy(lanUrls.counter, '柜台点菜')">复制</button>
+          </div>
+          <div class="url-row" v-for="item in lanExtraList" :key="item.key">
+            <span class="url-label">{{ item.label }}</span>
+            <span class="url-text">{{ item.url }}</span>
+            <button class="btn ghost btn-sm" @click="copy(item.url, item.label)">复制</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 运行状态 / Runtime status -->
+      <section class="section">
+        <h2 class="section-title">运行状态</h2>
+        <p class="section-sub">以下信息由程序自动提供，供排查问题使用。</p>
+        <div class="status-list" v-if="status">
+          <div class="status-row">
+            <span class="k">当前模式</span>
+            <span class="v">{{ status.isMockPrinter ? '模拟打印' : '真实打印机（' + status.printerMode + '）' }}</span>
+          </div>
+          <div class="status-row">
+            <span class="k">当前端口</span>
+            <span class="v">{{ status.port }}</span>
+          </div>
+          <div class="status-row">
+            <span class="k">版本</span>
+            <span class="v">{{ status.version }}</span>
+          </div>
+          <div class="status-row">
+            <span class="k">数据库文件</span>
+            <span class="v">{{ status.dbPath }}</span>
+          </div>
+          <div class="status-row">
+            <span class="k">打印输出目录</span>
+            <span class="v">{{ status.printedDir }}</span>
+          </div>
+        </div>
+        <div class="empty" v-else>状态加载中…</div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    /* ==========================================================================
+     * 系统设置页应用逻辑 / System settings page application logic
+     * 依赖 / Depends on: Vue（全局）、ROS.get/put/post、ROS.toast
+     * ========================================================================== */
+    (function () {
+      "use strict";
+
+      // 访问地址中文标签 / Chinese labels for the access URLs
+      var URL_LABELS = {
+        counter: "柜台点菜",
+        kitchen: "厨房看板",
+        admin: "菜品管理",
+        settings: "系统设置",
+      };
+
+      // 本机地址展示顺序 / Display order of the localhost URLs
+      var URL_ORDER = ["counter", "kitchen", "admin", "settings"];
+
+      /**
+       * 判断一个值是否为整数 / Check whether a value is an integer.
+       * @param {*} value 待判断的值 / value to check
+       * @returns {boolean} 是否为整数 / whether it is an integer
+       */
+      function isInteger(value) {
+        return typeof value === "number" && isFinite(value) && Math.floor(value) === value;
+      }
+
+      Vue.createApp({
+        /**
+         * 组件初始数据 / Component initial data.
+         */
+        data: function () {
+          return {
+            // 设置表单 / Settings form
+            form: {
+              shopName: "",
+              serverPort: 8000,
+              printCounterTicket: true,
+              printKitchenTicket: true,
+              printer: {
+                mode: "mock",
+                host: "",
+                port: 9100,
+                usbVendorId: null,
+                usbProductId: null,
+                paperWidth: 58,
+              },
+            },
+            // 运行状态 / Runtime status
+            status: null,
+            // 是否正在保存 / Whether a save is in progress
+            saving: false,
+            // 是否正在测试打印 / Whether a test print is running
+            testing: false,
+            // 测试打印结果 / Test print result
+            testResult: { show: false, ok: false, message: "" },
+            // 保存结果 / Save result
+            saveResult: { show: false, restartRequired: false, message: "" },
+          };
+        },
+
+        computed: {
+          /**
+           * 顶部导航展示的店名 / Shop name shown in the top bar.
+           * @returns {string} 店名 / shop name
+           */
+          displayShopName: function () {
+            return this.form.shopName || "系统设置";
+          },
+
+          /**
+           * 本机访问地址列表 / List of localhost access URLs.
+           * @returns {Array} 地址项列表 / list of URL items
+           */
+          localUrlList: function () {
+            var urls = (this.status && this.status.localUrls) || {};
+            return URL_ORDER.filter(function (key) {
+              return urls[key];
+            }).map(function (key) {
+              return { key: key, label: URL_LABELS[key], url: urls[key] };
+            });
+          },
+
+          /**
+           * 局域网地址对象（厨房 / 柜台单独大字展示，其余在此）
+           * LAN URLs object (kitchen / counter shown large; the rest here).
+           * @returns {Object} 地址映射 / URL mapping
+           */
+          lanUrls: function () {
+            return (this.status && this.status.lanUrls) || {};
+          },
+
+          /**
+           * 局域网其余页面地址（菜品管理 / 系统设置）
+           * Remaining LAN page URLs (admin / settings).
+           * @returns {Array} 地址项列表 / list of URL items
+           */
+          lanExtraList: function () {
+            var urls = this.lanUrls;
+            return ["admin", "settings"].filter(function (key) {
+              return urls[key];
+            }).map(function (key) {
+              return { key: key, label: URL_LABELS[key], url: urls[key] };
+            });
+          },
+        },
+
+        methods: {
+          /**
+           * 加载设置与运行状态 / Load the settings and the runtime status.
+           * @returns {Promise<void>} 无 / none
+           */
+          loadAll: function () {
+            return Promise.all([this.loadSettings(), this.loadStatus()]);
+          },
+
+          /**
+           * 加载系统设置 / Load the system settings.
+           * @returns {Promise<void>} 无 / none
+           */
+          loadSettings: function () {
+            var self = this;
+            return ROS.get("/api/settings")
+              .then(function (data) {
+                if (!data) {
+                  return;
+                }
+                self.form = {
+                  shopName: data.shopName || "",
+                  serverPort: data.serverPort,
+                  printCounterTicket: !!data.printCounterTicket,
+                  printKitchenTicket: !!data.printKitchenTicket,
+                  printer: {
+                    mode: (data.printer && data.printer.mode) || "mock",
+                    host: (data.printer && data.printer.host) || "",
+                    port: (data.printer && data.printer.port) || 9100,
+                    usbVendorId: data.printer ? data.printer.usbVendorId : null,
+                    usbProductId: data.printer ? data.printer.usbProductId : null,
+                    paperWidth: (data.printer && data.printer.paperWidth) || 58,
+                  },
+                };
+              })
+              .catch(function (err) {
+                ROS.toast("设置加载失败：" + ((err && err.message) || err), "error");
+              });
+          },
+
+          /**
+           * 加载运行状态 / Load the runtime status.
+           * @returns {Promise<void>} 无 / none
+           */
+          loadStatus: function () {
+            var self = this;
+            return ROS.get("/api/settings/status")
+              .then(function (data) {
+                self.status = data || null;
+              })
+              .catch(function (err) {
+                ROS.toast("状态加载失败：" + ((err && err.message) || err), "error");
+              });
+          },
+
+          /**
+           * 测试打印 / Run a test print.
+           * @returns {Promise<void>} 无 / none
+           */
+          testPrint: function () {
+            var self = this;
+            this.testing = true;
+            // 结果区先隐藏，避免误读旧结果 / Hide the old result before running
+            this.testResult = { show: false, ok: false, message: "" };
+            return ROS.post("/api/settings/test-print")
+              .then(function (res) {
+                self.testResult = {
+                  show: true,
+                  ok: !!(res && res.ok),
+                  message: (res && res.message) || "",
+                };
+              })
+              .catch(function (err) {
+                self.testResult = {
+                  show: true,
+                  ok: false,
+                  message: (err && err.message) || "测试打印请求失败",
+                };
+              })
+              .then(function () {
+                self.testing = false;
+              });
+          },
+
+          /**
+           * 校验表单 / Validate the form before saving.
+           * @returns {string|null} 错误提示，合法时为 null / error message or null
+           */
+          validateForm: function () {
+            var name = (this.form.shopName || "").trim();
+            if (!name) {
+              return "店铺名称不能为空";
+            }
+            if (name.length > 32) {
+              return "店铺名称长度不能超过 32 个字符";
+            }
+            var port = this.form.serverPort;
+            if (!isInteger(port) || port < 1024 || port > 65535) {
+              return "服务端口必须是 1024 - 65535 之间的整数";
+            }
+            var printer = this.form.printer;
+            if (printer.mode === "network") {
+              if (!(printer.host || "").trim()) {
+                return "网口模式下打印机 IP / 主机名不能为空";
+              }
+              if (!isInteger(printer.port) || printer.port < 1 || printer.port > 65535) {
+                return "网口打印机端口必须是 1 - 65535 之间的整数";
+              }
+            }
+            if (printer.mode === "usb") {
+              if (!isInteger(printer.usbVendorId) || printer.usbVendorId <= 0) {
+                return "USB 打印机必须填写正整数厂商 ID";
+              }
+              if (!isInteger(printer.usbProductId) || printer.usbProductId <= 0) {
+                return "USB 打印机必须填写正整数产品 ID";
+              }
+            }
+            return null;
+          },
+
+          /**
+           * 构建保存请求体 / Build the save request payload.
+           * @returns {Object} 请求体 / request payload
+           */
+          buildPayload: function () {
+            var printer = this.form.printer;
+            var payload = {
+              shopName: (this.form.shopName || "").trim(),
+              serverPort: this.form.serverPort,
+              printCounterTicket: !!this.form.printCounterTicket,
+              printKitchenTicket: !!this.form.printKitchenTicket,
+              printer: {
+                mode: printer.mode,
+                paperWidth: printer.paperWidth,
+              },
+            };
+            if (printer.mode === "network") {
+              payload.printer.host = (printer.host || "").trim();
+              payload.printer.port = printer.port;
+            }
+            if (printer.mode === "usb") {
+              payload.printer.usbVendorId = printer.usbVendorId;
+              payload.printer.usbProductId = printer.usbProductId;
+            }
+            return payload;
+          },
+
+          /**
+           * 保存设置（端口变更时提示需重启）
+           * Save the settings, hinting a restart when the port changed.
+           * @returns {Promise<void>} 无 / none
+           */
+          save: function () {
+            var error = this.validateForm();
+            if (error) {
+              ROS.toast(error, "warning");
+              return Promise.resolve();
+            }
+            var self = this;
+            this.saving = true;
+            this.saveResult = { show: false, restartRequired: false, message: "" };
+            return ROS.put("/api/settings", this.buildPayload())
+              .then(function (res) {
+                self.applySettings(res);
+                var restartRequired = !!(res && res.restartRequired);
+                self.saveResult = {
+                  show: true,
+                  restartRequired: restartRequired,
+                  message: restartRequired
+                    ? "服务端口已修改，需重启程序后生效"
+                    : "已保存并立即生效",
+                };
+                ROS.toast(restartRequired ? "已保存，端口需重启生效" : "设置已保存", "success");
+                return self.loadStatus();
+              })
+              .catch(function (err) {
+                ROS.toast((err && err.message) || "保存失败", "error");
+              })
+              .then(function () {
+                self.saving = false;
+              });
+          },
+
+          /**
+           * 用接口返回的设置回填表单 / Fill the form from a settings response.
+           * @param {Object} data 设置数据 / settings data
+           */
+          applySettings: function (data) {
+            if (!data) {
+              return;
+            }
+            this.form = {
+              shopName: data.shopName || "",
+              serverPort: data.serverPort,
+              printCounterTicket: !!data.printCounterTicket,
+              printKitchenTicket: !!data.printKitchenTicket,
+              printer: {
+                mode: (data.printer && data.printer.mode) || "mock",
+                host: (data.printer && data.printer.host) || "",
+                port: (data.printer && data.printer.port) || 9100,
+                usbVendorId: data.printer ? data.printer.usbVendorId : null,
+                usbProductId: data.printer ? data.printer.usbProductId : null,
+                paperWidth: (data.printer && data.printer.paperWidth) || 58,
+              },
+            };
+          },
+
+          /**
+           * 复制文本到剪贴板 / Copy a text value to the clipboard.
+           * @param {string} text 待复制文本 / text to copy
+           * @param {string} label 文本用途说明 / label describing the text
+           */
+          copy: function (text, label) {
+            if (!text) {
+              return;
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard
+                .writeText(text)
+                .then(function () {
+                  ROS.toast("已复制" + (label ? "：" + label : ""), "success");
+                })
+                .catch(function () {
+                  ROS.toast("复制失败，请手动选择复制", "error");
+                });
+            } else {
+              ROS.toast("当前浏览器不支持自动复制，请手动复制", "warning");
+            }
+          },
+        },
+
+        /**
+         * 挂载后加载设置与状态 / Load settings and status after mount.
+         */
+        mounted: function () {
+          this.loadAll();
+        },
+      }).mount("#app");
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>柜台点菜 - 餐饮小店点菜系统</title>
+  <!-- 基础设计系统 / Base design system -->
+  <link rel="stylesheet" href="/static/css/base.css">
+  <!-- 离线第三方库与共享脚本（顺序不可变）/ Offline vendor lib and shared scripts (order matters) -->
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/sse.js"></script>
+  <script src="/static/js/common.js"></script>
+  <style>
+    /* ==========================================================================
+     * 柜台点菜页专属样式（复用 base.css 的设计令牌）
+     * Page-specific styles for the counter page (reusing base.css design tokens).
+     * ========================================================================== */
+
+    /* 整页骨架：撑满视口，内部区域各自滚动 / Full-height shell with internal scrolling */
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* 顶部导航 / Top navigation */
+    .topbar {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      padding: var(--space-3) var(--space-5);
+      background: var(--color-bg);
+      color: var(--color-text-inverse);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .topbar .brand {
+      font-size: 18px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .topbar .nav {
+      display: flex;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
+
+    .topbar .nav a {
+      color: var(--color-text-inverse);
+      text-decoration: none;
+      padding: 6px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 15px;
+      opacity: 0.78;
+      transition: background 0.15s ease, opacity 0.15s ease;
+    }
+
+    .topbar .nav a:hover {
+      background: rgba(255, 255, 255, 0.12);
+      opacity: 1;
+    }
+
+    .topbar .nav a.active {
+      background: var(--color-primary);
+      opacity: 1;
+    }
+
+    .topbar .spacer {
+      flex: 1 1 auto;
+    }
+
+    /* 主区域：三栏（点菜 / 购物车 / 订单）/ Main grid: three columns */
+    .main {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px 400px;
+      grid-auto-rows: minmax(0, 1fr);
+      gap: var(--space-4);
+      padding: var(--space-4);
+    }
+
+    /* 通用面板 / Generic panel */
+    .panel {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+      background: var(--color-surface-2);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .panel-head {
+      flex: 0 0 auto;
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--color-border-light);
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .panel-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: var(--space-4);
+    }
+
+    /* 分类标签 / Category tabs */
+    .cat-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+
+    .cat-tab {
+      padding: 10px 20px;
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-pill);
+      background: var(--color-surface-2);
+      color: var(--color-text);
+      font-size: 16px;
+      line-height: 1.2;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .cat-tab:hover {
+      border-color: var(--color-primary-light);
+    }
+
+    .cat-tab.active {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      color: #fff;
+    }
+
+    /* 菜品网格 / Dish grid */
+    .dish-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: var(--space-3);
+      margin-top: var(--space-4);
+    }
+
+    .dish-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: var(--space-3);
+      text-align: left;
+      background: var(--color-surface-2);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: box-shadow 0.15s ease, transform 0.05s ease;
+    }
+
+    .dish-card:hover {
+      box-shadow: var(--shadow-md);
+    }
+
+    .dish-card:active {
+      transform: scale(0.98);
+    }
+
+    .dish-card .dish-name {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .dish-card .dish-desc {
+      font-size: 12px;
+      color: var(--color-text-muted);
+      line-height: 1.35;
+    }
+
+    .dish-card .dish-foot {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-top: auto;
+      padding-top: 6px;
+    }
+
+    .dish-card .dish-price {
+      color: var(--color-primary);
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .dish-card .dish-unit {
+      font-size: 12px;
+      color: var(--color-text-muted);
+    }
+
+    /* 售罄菜品：置灰且不可点 / Sold-out dish: greyed out and not clickable */
+    .dish-card.sold-out {
+      background: #f0f0f2;
+      filter: grayscale(1);
+      opacity: 0.72;
+      cursor: not-allowed;
+    }
+
+    .dish-card.sold-out:hover {
+      box-shadow: none;
+    }
+
+    .dish-card .soldout-badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      background: var(--color-danger);
+      color: #fff;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    /* 购物车：顶部固定区（桌号 + 就餐方式）/ Cart top fixed area */
+    .cart-top {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--color-border-light);
+    }
+
+    /* 堂食 / 打包 切换 / Dine-in vs takeaway toggle */
+    .dining-toggle {
+      display: inline-flex;
+      flex: 0 0 auto;
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+
+    .dining-toggle button {
+      padding: 8px 14px;
+      border: none;
+      background: var(--color-surface-2);
+      color: var(--color-text);
+      font-size: 15px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .dining-toggle button.active {
+      background: var(--color-primary);
+      color: #fff;
+    }
+
+    /* 购物车明细 / Cart items */
+    .cart-list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .cart-item {
+      padding: var(--space-3) 0;
+      border-bottom: 1px dashed var(--color-border-light);
+    }
+
+    .cart-item:first-child {
+      padding-top: 0;
+    }
+
+    .cart-item:last-child {
+      border-bottom: none;
+    }
+
+    .cart-line {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .cart-line + .cart-line {
+      margin-top: 8px;
+    }
+
+    .ci-name {
+      font-weight: 600;
+    }
+
+    .ci-price {
+      color: var(--color-text-muted);
+      font-size: 13px;
+    }
+
+    .ci-sub {
+      margin-left: auto;
+      min-width: 76px;
+      text-align: right;
+      font-weight: 700;
+      color: var(--color-primary);
+    }
+
+    .ci-remark {
+      margin-top: var(--space-2);
+    }
+
+    .ci-remark .input {
+      padding: 6px 10px;
+      font-size: 13px;
+    }
+
+    .qty-ctl {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .qty-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border: 1px solid var(--color-border-light);
+      border-radius: 50%;
+      background: var(--color-surface-2);
+      color: var(--color-text);
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .qty-btn:hover {
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+    }
+
+    .qty-num {
+      min-width: 24px;
+      text-align: center;
+      font-weight: 600;
+    }
+
+    /* 购物车底部结算区 / Cart footer */
+    .cart-foot {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      padding: var(--space-4);
+      border-top: 1px solid var(--color-border-light);
+    }
+
+    .total-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+    }
+
+    .total-row .label {
+      font-size: 16px;
+      color: var(--color-text-muted);
+    }
+
+    .total-row .amount {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--color-primary);
+    }
+
+    /* 订单筛选标签 / Order filter tabs */
+    .filter-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: var(--space-3);
+    }
+
+    .filter-tab {
+      padding: 6px 12px;
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-pill);
+      background: var(--color-surface-2);
+      color: var(--color-text);
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .filter-tab.active {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      color: #fff;
+    }
+
+    /* 订单卡片 / Order cards */
+    .order-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .order-card {
+      padding: var(--space-3);
+      background: var(--color-surface-2);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-md);
+    }
+
+    .order-head {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .order-no {
+      font-weight: 700;
+    }
+
+    .order-total {
+      margin-left: auto;
+      font-weight: 700;
+      color: var(--color-primary);
+    }
+
+    .order-meta {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--color-text-muted);
+    }
+
+    .order-items {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin: var(--space-2) 0;
+    }
+
+    .item-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: 14px;
+    }
+
+    .item-row .iqty {
+      color: var(--color-text-muted);
+    }
+
+    .item-row .iremark {
+      font-size: 12px;
+      color: var(--color-warning);
+    }
+
+    .item-row .istatus {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--color-text-muted);
+      white-space: nowrap;
+    }
+
+    /* 已出餐明细：删除线 + 绿色状态 / Served item: line-through + green status */
+    .item-row.done {
+      color: var(--color-text-muted);
+      text-decoration: line-through;
+    }
+
+    .item-row.done .istatus {
+      color: var(--color-success);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .order-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-top: var(--space-2);
+    }
+
+    .order-actions .btn {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    /* 弹窗内容 / Modal content */
+    .modal-title {
+      margin: 0 0 var(--space-2);
+      font-size: 18px;
+    }
+
+    .confirm-lines {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      margin: var(--space-3) 0;
+    }
+
+    .confirm-line {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+
+    .confirm-line .k {
+      color: var(--color-text-muted);
+    }
+
+    .confirm-line .v {
+      font-weight: 600;
+      text-align: right;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--space-2);
+      margin-top: var(--space-4);
+    }
+
+    .print-choices {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      margin-top: var(--space-3);
+    }
+
+    .print-choices .btn {
+      justify-content: flex-start;
+    }
+
+    /* 窄屏回退：三栏降为两栏、再降为单栏 / Narrow-screen fallback */
+    @media (max-width: 1280px) {
+      .main {
+        grid-template-columns: minmax(0, 1fr) 340px;
+      }
+      .orders-panel {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .main {
+        grid-template-columns: 1fr;
+      }
+      .app-shell {
+        height: auto;
+        overflow: visible;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Vue 挂载点 / Vue mount point -->
+  <div id="app" class="app-shell">
+    <!-- 顶部导航 / Top navigation -->
+    <header class="topbar">
+      <div class="brand">{{ shopName }}</div>
+      <nav class="nav">
+        <a href="/counter" class="active">柜台点菜</a>
+        <a href="/kitchen">厨房看板</a>
+        <a href="/stats">营业统计</a>
+        <a href="/admin">菜品管理</a>
+        <a href="/settings">系统设置</a>
+      </nav>
+      <div class="spacer"></div>
+    </header>
+
+    <main class="main">
+      <!-- 左区：点菜 / Left: ordering -->
+      <section class="panel menu-panel">
+        <div class="panel-head">点菜</div>
+        <div class="panel-body">
+          <div class="cat-tabs">
+            <button
+              class="cat-tab"
+              :class="{ active: activeCategoryId === null }"
+              @click="selectCategory(null)"
+            >全部</button>
+            <button
+              class="cat-tab"
+              v-for="c in categories"
+              :key="c.id"
+              :class="{ active: activeCategoryId === c.id }"
+              @click="selectCategory(c.id)"
+            >{{ c.name }}</button>
+          </div>
+
+          <div class="dish-grid" v-if="visibleDishes.length">
+            <div
+              class="dish-card"
+              v-for="d in visibleDishes"
+              :key="d.id"
+              :class="{ 'sold-out': !d.isAvailable }"
+              @click="addDish(d)"
+            >
+              <span class="soldout-badge" v-if="!d.isAvailable">售罄</span>
+              <div class="dish-name">{{ d.name }}</div>
+              <div class="dish-desc" v-if="d.description">{{ d.description }}</div>
+              <div class="dish-foot">
+                <span class="dish-price">{{ money(d.price) }}</span>
+                <span class="dish-unit">/{{ d.unit }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="empty" v-else>暂无菜品</div>
+        </div>
+      </section>
+
+      <!-- 右区：购物车与下单 / Right: cart and submit -->
+      <section class="panel cart-panel">
+        <div class="panel-head">购物车</div>
+
+        <div class="cart-top">
+          <div class="grow">
+            <input class="input" v-model.trim="tableNo" placeholder="桌号，如 A1" />
+          </div>
+          <div class="dining-toggle">
+            <button :class="{ active: diningType === 'dine_in' }" @click="setDiningType('dine_in')">堂食</button>
+            <button :class="{ active: diningType === 'takeaway' }" @click="setDiningType('takeaway')">打包</button>
+          </div>
+        </div>
+
+        <div class="panel-body">
+          <div class="cart-list" v-if="cart.length">
+            <div class="cart-item" v-for="item in cart" :key="item.dishId">
+              <div class="cart-line">
+                <span class="grow ci-name">{{ item.name }}</span>
+                <span class="ci-price">{{ money(item.price) }}/{{ item.unit }}</span>
+              </div>
+              <div class="cart-line">
+                <div class="qty-ctl">
+                  <button class="qty-btn" @click="decQty(item)" title="减少">−</button>
+                  <span class="qty-num">{{ item.quantity }}</span>
+                  <button class="qty-btn" @click="incQty(item)" title="增加">＋</button>
+                </div>
+                <span class="ci-sub">{{ money(cartSubtotal(item)) }}</span>
+              </div>
+              <div class="ci-remark">
+                <input class="input" v-model.trim="item.remark" placeholder="口味备注，如不要辣" />
+              </div>
+            </div>
+          </div>
+          <div class="empty" v-else>购物车为空，点击左侧菜品添加</div>
+        </div>
+
+        <div class="cart-foot">
+          <input class="input" v-model.trim="orderRemark" placeholder="订单备注（可选）" />
+          <div class="total-row">
+            <span class="label">合计</span>
+            <span class="amount">{{ money(totalAmount) }}</span>
+          </div>
+          <button
+            class="btn primary btn-lg"
+            :disabled="!cart.length || submitting"
+            @click="openConfirmOrder"
+          >{{ submitting ? '提交中…' : '下单' }}</button>
+        </div>
+      </section>
+
+      <!-- 侧边：订单列表 / Side: order list -->
+      <section class="panel orders-panel">
+        <div class="panel-head">订单</div>
+        <div class="panel-body">
+          <div class="filter-tabs">
+            <button
+              class="filter-tab"
+              v-for="f in filters"
+              :key="f.value"
+              :class="{ active: statusFilter === f.value }"
+              @click="setFilter(f.value)"
+            >{{ f.label }}</button>
+          </div>
+
+          <div class="order-list" v-if="displayOrders.length">
+            <div class="order-card" v-for="o in displayOrders" :key="o.id">
+              <div class="order-head">
+                <span class="order-no">{{ o.orderNo }}</span>
+                <span class="badge" :class="badgeClass(o.status)">{{ o.statusText || statusText(o.status) }}</span>
+                <span class="order-total">{{ money(o.totalAmount) }}</span>
+              </div>
+              <div class="order-meta">
+                {{ tableLabel(o) }} · {{ time(o.createdTime) }} · 已打印 {{ o.printCount }} 次
+              </div>
+              <div class="order-items">
+                <div
+                  class="item-row"
+                  v-for="it in o.items"
+                  :key="it.id"
+                  :class="{ done: it.status === 'completed' }"
+                >
+                  <span class="iname">{{ it.dishName }}</span>
+                  <span class="iqty">×{{ it.quantity }}</span>
+                  <span class="iremark" v-if="it.remark">{{ it.remark }}</span>
+                  <span class="istatus">{{ it.status === 'completed' ? '✓ 已出餐' : '待出餐' }}</span>
+                </div>
+              </div>
+              <div class="order-actions">
+                <button class="btn ghost" @click="openReprint(o)">补打</button>
+                <button class="btn success" v-if="o.status === 'completed'" @click="openSettle(o)">结账</button>
+                <button
+                  class="btn danger"
+                  v-if="o.status === 'pending' || o.status === 'cooking'"
+                  @click="openCancel(o)"
+                >取消订单</button>
+              </div>
+            </div>
+          </div>
+          <div class="empty" v-else>
+            <div>暂无订单</div>
+            <div style="font-size: 13px;">新订单会实时出现在这里</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 通用确认弹窗 / Generic confirm modal -->
+    <div class="modal" :hidden="!confirmModal.show">
+      <div class="modal-content">
+        <h3 class="modal-title">{{ confirmModal.title }}</h3>
+        <div class="confirm-lines">
+          <div class="confirm-line" v-for="(line, i) in confirmModal.lines" :key="i">
+            <span class="k">{{ line.k }}</span>
+            <span class="v">{{ line.v }}</span>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn ghost" @click="closeConfirm">取消</button>
+          <button
+            class="btn"
+            :class="confirmModal.danger ? 'danger' : 'primary'"
+            @click="runConfirm"
+          >{{ confirmModal.confirmText }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 补打弹窗 / Reprint modal -->
+    <div class="modal" :hidden="!reprintModal.show">
+      <div class="modal-content">
+        <h3 class="modal-title">补打小票</h3>
+        <div class="order-meta" v-if="reprintOrder">订单 {{ reprintOrder.orderNo }}</div>
+        <div class="print-choices">
+          <button class="btn" :class="reprintTarget === 'counter' ? 'primary' : 'ghost'" @click="reprintTarget = 'counter'">柜台单</button>
+          <button class="btn" :class="reprintTarget === 'kitchen' ? 'primary' : 'ghost'" @click="reprintTarget = 'kitchen'">厨房单</button>
+          <button class="btn" :class="reprintTarget === 'both' ? 'primary' : 'ghost'" @click="reprintTarget = 'both'">都打</button>
+        </div>
+        <div class="modal-actions">
+          <button class="btn ghost" @click="closeReprint">取消</button>
+          <button class="btn primary" @click="doReprint">打印</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ==========================================================================
+     * 柜台点菜页应用逻辑 / Counter page application logic
+     * 依赖 / Depends on: Vue（全局）、ROS.get/post/patch、ROS.connectStream、
+     * ROS.formatMoney/formatTime/toast/ORDER_STATUS_TEXT/DINING_TYPE_TEXT/
+     * ITEM_STATUS_TEXT/statusBadgeClass
+     * ========================================================================== */
+    (function () {
+      "use strict";
+
+      // 打印目标中文文案 / Chinese texts for print targets
+      var PRINT_TARGET_TEXT = { counter: "柜台单", kitchen: "厨房单", both: "都打" };
+
+      // 待执行的确认动作（放在组件外，避免被响应式包装）
+      // Pending confirm action (kept outside the component to avoid reactivity wrapping)
+      var pendingAction = null;
+
+      Vue.createApp({
+        /**
+         * 组件初始数据 / Component initial data.
+         */
+        data: function () {
+          return {
+            // 店名 / Shop name
+            shopName: "餐饮小店",
+            // 菜单分类 / Menu categories
+            categories: [],
+            // 当前分类 ID，null 表示「全部」/ Active category id, null means "all"
+            activeCategoryId: null,
+
+            // 购物车明细 / Cart items
+            cart: [],
+            // 桌号 / Table number
+            tableNo: "",
+            // 就餐方式：dine_in / takeaway / Dining type
+            diningType: "dine_in",
+            // 订单备注 / Order remark
+            orderRemark: "",
+            // 是否正在提交 / Whether an order is being submitted
+            submitting: false,
+
+            // 订单列表 / Order list
+            orders: [],
+            // 状态筛选项 / Status filter options
+            filters: [
+              { value: "unfinished", label: "未完成" },
+              { value: "all", label: "全部" },
+              { value: "pending", label: "待接单" },
+              { value: "cooking", label: "制作中" },
+              { value: "completed", label: "已出餐" },
+              { value: "settled", label: "已结账" },
+              { value: "cancelled", label: "已取消" },
+            ],
+            // 当前状态筛选值 / Current status filter value
+            statusFilter: "unfinished",
+
+            // 通用确认弹窗状态 / Generic confirm modal state
+            confirmModal: { show: false, title: "", lines: [], confirmText: "确认", danger: false },
+            // 补打弹窗状态 / Reprint modal state
+            reprintModal: { show: false },
+            // 待补打的订单 / Order being reprinted
+            reprintOrder: null,
+            // 补打目标 / Reprint target
+            reprintTarget: "both",
+
+            // SSE 连接句柄 / SSE connection handle
+            stream: null,
+          };
+        },
+
+        computed: {
+          /**
+           * 展平全部菜品（跨分类）/ Flatten all dishes across categories.
+           * @returns {Array} 菜品列表 / dish list
+           */
+          allDishes: function () {
+            var result = [];
+            this.categories.forEach(function (category) {
+              (category.dishes || []).forEach(function (dish) {
+                result.push(dish);
+              });
+            });
+            return result;
+          },
+
+          /**
+           * 当前分类下可见的菜品 / Dishes visible under the active category.
+           * @returns {Array} 菜品列表 / dish list
+           */
+          visibleDishes: function () {
+            var active = this.activeCategoryId;
+            if (active === null || active === undefined) {
+              return this.allDishes;
+            }
+            return this.allDishes.filter(function (dish) {
+              return dish.categoryId === active;
+            });
+          },
+
+          /**
+           * 购物车合计金额（元，数值）/ Cart total amount in yuan as a number.
+           * @returns {number} 合计金额 / total amount
+           */
+          totalAmount: function () {
+            return this.cart.reduce(function (sum, item) {
+              return sum + Number(item.price) * item.quantity;
+            }, 0);
+          },
+
+          /**
+           * 购物车总份数 / Total quantity in the cart.
+           * @returns {number} 总份数 / total quantity
+           */
+          cartCount: function () {
+            return this.cart.reduce(function (sum, item) {
+              return sum + item.quantity;
+            }, 0);
+          },
+
+          /**
+           * 当前筛选下展示的订单 / Orders shown under the current filter.
+           * @returns {Array} 订单列表 / order list
+           */
+          displayOrders: function () {
+            var filter = this.statusFilter;
+            if (filter === "all") {
+              return this.orders;
+            }
+            if (filter === "unfinished") {
+              return this.orders.filter(function (o) {
+                return o.status === "pending" || o.status === "cooking";
+              });
+            }
+            return this.orders.filter(function (o) {
+              return o.status === filter;
+            });
+          },
+        },
+
+        methods: {
+          /**
+           * 格式化金额（带 ¥ 前缀）/ Format an amount with a ¥ prefix.
+           * @param {string|number} value 金额 / amount
+           * @returns {string} 如 "¥28.00" / e.g. "¥28.00"
+           */
+          money: function (value) {
+            return "¥" + ROS.formatMoney(value);
+          },
+
+          /**
+           * 格式化时间 / Format a time value.
+           * @param {string} iso ISO 时间字符串 / ISO time string
+           * @returns {string} 格式化结果 / formatted result
+           */
+          time: function (iso) {
+            return ROS.formatTime(iso);
+          },
+
+          /**
+           * 订单状态中文文案 / Chinese text of an order status.
+           * @param {string} status 状态 / status
+           * @returns {string} 中文文案 / Chinese text
+           */
+          statusText: function (status) {
+            return ROS.ORDER_STATUS_TEXT[status] || status;
+          },
+
+          /**
+           * 订单状态徽标样式类 / Badge style class for an order status.
+           * @param {string} status 状态 / status
+           * @returns {string} 样式类名 / style class name
+           */
+          badgeClass: function (status) {
+            return ROS.statusBadgeClass(status);
+          },
+
+          /**
+           * 桌号展示文案（无桌号的打包单显示「打包」）/ Table label text.
+           * @param {object} order 订单 / order
+           * @returns {string} 展示文案 / display text
+           */
+          tableLabel: function (order) {
+            if (order.tableNo) {
+              return "桌号 " + order.tableNo;
+            }
+            if (order.diningType === "takeaway") {
+              return "打包";
+            }
+            return order.diningTypeText || "未填桌号";
+          },
+
+          /**
+           * 打印目标中文文案 / Chinese text of a print target.
+           * @param {string} target 打印目标 / print target
+           * @returns {string} 中文文案 / Chinese text
+           */
+          targetText: function (target) {
+            return PRINT_TARGET_TEXT[target] || "小票";
+          },
+
+          /**
+           * 加载菜单 / Load the menu.
+           * @returns {Promise<void>} 无 / none
+           */
+          loadMenu: function () {
+            var self = this;
+            return ROS.get("/api/menu")
+              .then(function (data) {
+                if (data && data.shopName) {
+                  self.shopName = data.shopName;
+                }
+                self.categories = (data && data.categories) || [];
+              })
+              .catch(function (err) {
+                ROS.toast("菜单加载失败：" + ((err && err.message) || err), "error");
+              });
+          },
+
+          /**
+           * 切换分类 / Switch the active category.
+           * @param {number|null} categoryId 分类 ID / category id
+           */
+          selectCategory: function (categoryId) {
+            this.activeCategoryId = categoryId;
+          },
+
+          /**
+           * 把菜品加入购物车（售罄则提示）/ Add a dish to the cart.
+           * @param {object} dish 菜品 / dish
+           */
+          addDish: function (dish) {
+            if (!dish.isAvailable) {
+              ROS.toast("「" + dish.name + "」已售罄，暂时无法点单", "warning");
+              return;
+            }
+            var existing = this.cart.find(function (item) {
+              return item.dishId === dish.id;
+            });
+            if (existing) {
+              existing.quantity += 1;
+            } else {
+              this.cart.push({
+                dishId: dish.id,
+                name: dish.name,
+                price: dish.price,
+                unit: dish.unit,
+                quantity: 1,
+                remark: "",
+              });
+            }
+          },
+
+          /**
+           * 增加数量 / Increase an item quantity.
+           * @param {object} item 购物车明细 / cart item
+           */
+          incQty: function (item) {
+            item.quantity += 1;
+          },
+
+          /**
+           * 减少数量（为 1 时移除该项）/ Decrease an item quantity, removing it at 1.
+           * @param {object} item 购物车明细 / cart item
+           */
+          decQty: function (item) {
+            if (item.quantity > 1) {
+              item.quantity -= 1;
+            } else {
+              this.removeItem(item);
+            }
+          },
+
+          /**
+           * 从购物车移除某项 / Remove an item from the cart.
+           * @param {object} item 购物车明细 / cart item
+           */
+          removeItem: function (item) {
+            var index = this.cart.indexOf(item);
+            if (index >= 0) {
+              this.cart.splice(index, 1);
+            }
+          },
+
+          /**
+           * 明细小计（元，数值）/ Subtotal of a cart item in yuan.
+           * @param {object} item 购物车明细 / cart item
+           * @returns {number} 小计金额 / subtotal
+           */
+          cartSubtotal: function (item) {
+            return Number(item.price) * item.quantity;
+          },
+
+          /**
+           * 切换就餐方式 / Switch the dining type.
+           * @param {string} type dine_in / takeaway
+           */
+          setDiningType: function (type) {
+            this.diningType = type;
+          },
+
+          /**
+           * 打开下单二次确认弹窗 / Open the order confirmation modal.
+           */
+          openConfirmOrder: function () {
+            if (!this.cart.length) {
+              return;
+            }
+            var tableDisplay = this.tableNo
+              ? this.tableNo
+              : this.diningType === "takeaway"
+              ? "打包"
+              : "未填写";
+            var self = this;
+            pendingAction = function () {
+              self.submitOrder();
+            };
+            this.confirmModal = {
+              show: true,
+              title: "确认下单",
+              lines: [
+                { k: "桌号", v: tableDisplay },
+                { k: "就餐方式", v: ROS.DINING_TYPE_TEXT[this.diningType] || this.diningType },
+                { k: "菜品数量", v: this.cartCount + " 份" },
+                { k: "合计金额", v: this.money(this.totalAmount) },
+              ],
+              confirmText: "确认下单",
+              danger: false,
+            };
+          },
+
+          /**
+           * 关闭确认弹窗 / Close the confirm modal.
+           */
+          closeConfirm: function () {
+            this.confirmModal.show = false;
+            pendingAction = null;
+          },
+
+          /**
+           * 执行确认动作 / Run the pending confirm action.
+           */
+          runConfirm: function () {
+            this.confirmModal.show = false;
+            var action = pendingAction;
+            pendingAction = null;
+            if (typeof action === "function") {
+              action();
+            }
+          },
+
+          /**
+           * 提交订单 / Submit the order.
+           * @returns {Promise<void>} 无 / none
+           */
+          submitOrder: function () {
+            if (this.submitting || !this.cart.length) {
+              return Promise.resolve();
+            }
+            var self = this;
+            this.submitting = true;
+            var payload = {
+              tableNo: this.tableNo ? this.tableNo : null,
+              diningType: this.diningType,
+              remark: this.orderRemark ? this.orderRemark : null,
+              items: this.cart.map(function (item) {
+                return {
+                  dishId: item.dishId,
+                  quantity: item.quantity,
+                  remark: item.remark ? item.remark : null,
+                };
+              }),
+            };
+            return ROS.post("/api/orders", payload)
+              .then(function (res) {
+                var order = res && res.order ? res.order : null;
+                if (order) {
+                  self.applyIncoming(order);
+                }
+                ROS.toast("下单成功：" + (order ? order.orderNo : ""), "success");
+                // 打印失败仅告警，不影响下单成功提示
+                // Print failures only warn; they never affect the success toast
+                var failed = ((res && res.printResults) || []).filter(function (r) {
+                  return !r.ok;
+                });
+                failed.forEach(function (r) {
+                  ROS.toast(
+                    "打印失败（" + self.targetText(r.target) + "）：" + r.message,
+                    "warning"
+                  );
+                });
+                // 清空购物车与备注 / Clear the cart and the remark
+                self.cart = [];
+                self.orderRemark = "";
+              })
+              .catch(function (err) {
+                ROS.toast((err && err.message) || "下单失败", "error");
+              })
+              .then(function () {
+                self.submitting = false;
+              });
+          },
+
+          /**
+           * 加载订单列表 / Load the order list.
+           * @returns {Promise<void>} 无 / none
+           */
+          loadOrders: function () {
+            var self = this;
+            return ROS.get("/api/orders", { limit: 50 })
+              .then(function (list) {
+                self.orders = Array.isArray(list) ? list.slice() : [];
+                self.sortOrders();
+              })
+              .catch(function (err) {
+                ROS.toast("订单加载失败：" + ((err && err.message) || err), "error");
+              });
+          },
+
+          /**
+           * 按创建时间倒序排列订单 / Sort orders by creation time descending.
+           */
+          sortOrders: function () {
+            this.orders.sort(function (a, b) {
+              if (a.createdTime === b.createdTime) {
+                return b.id - a.id;
+              }
+              return a.createdTime < b.createdTime ? 1 : -1;
+            });
+          },
+
+          /**
+           * 新增或更新一条订单（供下单响应与 SSE 复用）
+           * Insert or update an order (shared by the create response and SSE).
+           * @param {object} order 订单视图 / order view
+           */
+          applyIncoming: function (order) {
+            if (!order || order.id === undefined || order.id === null) {
+              return;
+            }
+            var index = this.orders.findIndex(function (o) {
+              return o.id === order.id;
+            });
+            if (index >= 0) {
+              this.orders.splice(index, 1, order);
+            } else {
+              this.orders.push(order);
+            }
+            this.sortOrders();
+          },
+
+          /**
+           * 切换订单状态筛选 / Switch the order status filter.
+           * @param {string} value 筛选值 / filter value
+           */
+          setFilter: function (value) {
+            this.statusFilter = value;
+          },
+
+          /**
+           * 打开补打弹窗 / Open the reprint modal.
+           * @param {object} order 订单 / order
+           */
+          openReprint: function (order) {
+            this.reprintOrder = order;
+            this.reprintTarget = "both";
+            this.reprintModal.show = true;
+          },
+
+          /**
+           * 关闭补打弹窗 / Close the reprint modal.
+           */
+          closeReprint: function () {
+            this.reprintModal.show = false;
+            this.reprintOrder = null;
+          },
+
+          /**
+           * 执行补打 / Perform the reprint.
+           * @returns {Promise<void>} 无 / none
+           */
+          doReprint: function () {
+            var order = this.reprintOrder;
+            if (!order) {
+              return Promise.resolve();
+            }
+            var self = this;
+            var target = this.reprintTarget;
+            this.reprintModal.show = false;
+            return ROS.post("/api/orders/" + order.id + "/print", { target: target })
+              .then(function (results) {
+                var arr = Array.isArray(results) ? results : [];
+                var failed = arr.filter(function (r) {
+                  return !r.ok;
+                });
+                if (!failed.length) {
+                  ROS.toast("补打成功（" + self.targetText(target) + "）", "success");
+                } else {
+                  failed.forEach(function (r) {
+                    ROS.toast(
+                      "补打失败（" + self.targetText(r.target) + "）：" + r.message,
+                      "warning"
+                    );
+                  });
+                }
+              })
+              .catch(function (err) {
+                ROS.toast((err && err.message) || "补打失败", "error");
+              })
+              .then(function () {
+                self.reprintOrder = null;
+                // 刷新列表以同步最新的已打印次数 / Refresh list to sync the latest printCount
+                return self.loadOrders();
+              });
+          },
+
+          /**
+           * 打开结账确认弹窗 / Open the settle confirmation modal.
+           * @param {object} order 订单 / order
+           */
+          openSettle: function (order) {
+            var self = this;
+            pendingAction = function () {
+              self.settleOrder(order);
+            };
+            this.confirmModal = {
+              show: true,
+              title: "确认结账",
+              lines: [
+                { k: "订单号", v: order.orderNo },
+                { k: "合计金额", v: this.money(order.totalAmount) },
+              ],
+              confirmText: "确认结账",
+              danger: false,
+            };
+          },
+
+          /**
+           * 执行结账 / Perform the settlement.
+           * @param {object} order 订单 / order
+           * @returns {Promise<void>} 无 / none
+           */
+          settleOrder: function (order) {
+            var self = this;
+            return ROS.patch("/api/orders/" + order.id + "/status", { status: "settled" })
+              .then(function (updated) {
+                self.applyIncoming(updated);
+                ROS.toast("已结账：" + order.orderNo, "success");
+              })
+              .catch(function (err) {
+                ROS.toast((err && err.message) || "结账失败", "error");
+              });
+          },
+
+          /**
+           * 打开取消订单确认弹窗 / Open the cancel confirmation modal.
+           * @param {object} order 订单 / order
+           */
+          openCancel: function (order) {
+            var self = this;
+            pendingAction = function () {
+              self.cancelOrder(order);
+            };
+            this.confirmModal = {
+              show: true,
+              title: "取消订单",
+              lines: [
+                { k: "订单号", v: order.orderNo },
+                { k: "桌号", v: this.tableLabel(order) },
+                { k: "合计金额", v: this.money(order.totalAmount) },
+              ],
+              confirmText: "确认取消",
+              danger: true,
+            };
+          },
+
+          /**
+           * 执行取消订单 / Perform the cancellation.
+           * @param {object} order 订单 / order
+           * @returns {Promise<void>} 无 / none
+           */
+          cancelOrder: function (order) {
+            var self = this;
+            return ROS.patch("/api/orders/" + order.id + "/status", { status: "cancelled" })
+              .then(function (updated) {
+                self.applyIncoming(updated);
+                ROS.toast("已取消：" + order.orderNo, "success");
+              })
+              .catch(function (err) {
+                ROS.toast((err && err.message) || "取消失败", "error");
+              });
+          },
+        },
+
+        /**
+         * 挂载后：加载菜单与订单，并订阅实时事件流
+         * On mount: load menu and orders, then subscribe to the realtime stream.
+         */
+        mounted: function () {
+          var self = this;
+          this.loadMenu();
+          this.loadOrders();
+
+          // 订阅 SSE：订单创建 / 状态变更 / 明细状态变更
+          // Subscribe to SSE: order created / status changed / item status changed
+          this.stream = ROS.connectStream({
+            onEvent: function (name, data) {
+              if (!data || data.id === undefined) {
+                return;
+              }
+              if (
+                name === "order.created" ||
+                name === "order.status_changed" ||
+                name === "order.item_status_changed"
+              ) {
+                self.applyIncoming(data);
+              }
+            },
+            onReconnect: function () {
+              // 重连后重新拉取，避免遗漏事件 / Refetch after reconnect to avoid gaps
+              self.loadOrders();
+            },
+          });
+        },
+
+        /**
+         * 卸载前关闭事件流 / Close the stream before unmount.
+         */
+        beforeUnmount: function () {
+          if (this.stream) {
+            this.stream.close();
+            this.stream = null;
+          }
+        },
+      }).mount("#app");
+    })();
+  </script>
+</body>
+</html>

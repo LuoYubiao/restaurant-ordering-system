@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>厨房看板</title>
+  <!-- 基础设计系统 / Base design system -->
+  <link rel="stylesheet" href="/static/css/base.css" />
+  <style>
+    /* ======================================================================
+     * 厨房看板页专属样式（页面专属，不改动 base.css）
+     * Kitchen board page styles (page-scoped; base.css is left untouched).
+     * ==================================================================== */
+
+    /* 模板编译前隐藏未渲染内容 / Hide raw template before Vue compiles it */
+    [v-cloak] { display: none; }
+
+    /* 深色大屏底色，突出大字信息 / Dark big-screen backdrop for high-contrast text */
+    body {
+      background: #14141a;
+      color: var(--color-text-inverse);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* 顶部导航 / Top navigation bar */
+    .k-topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-4);
+      padding: var(--space-3) var(--space-5);
+      background: var(--color-bg-elevated);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .k-brand {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: var(--color-primary-light);
+    }
+
+    .k-nav { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+    .k-nav a {
+      padding: 6px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 15px;
+      color: var(--color-text-inverse);
+      text-decoration: none;
+      opacity: 0.8;
+    }
+
+    .k-nav a:hover { background: rgba(255, 255, 255, 0.08); opacity: 1; }
+
+    .k-nav a.active { background: var(--color-primary); opacity: 1; }
+
+    .k-topbar-right {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      margin-left: auto;
+    }
+
+    /* 顶部按钮在深色底上的反色处理 / Invert top-bar buttons for the dark background */
+    .k-topbar-right .btn {
+      background: transparent;
+      color: var(--color-text-inverse);
+      border-color: var(--color-border);
+    }
+
+    .k-topbar-right .btn:hover { background: rgba(255, 255, 255, 0.08); }
+
+    /* 连接状态小圆点 / Connection status dot */
+    .k-conn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      color: var(--color-text-muted);
+    }
+
+    .k-dot {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .k-dot-on {
+      background: var(--color-success);
+      box-shadow: 0 0 8px rgba(47, 158, 68, 0.9);
+    }
+
+    .k-dot-off {
+      background: var(--color-danger);
+      box-shadow: 0 0 8px rgba(224, 49, 49, 0.9);
+    }
+
+    /* 统计条 / Statistics bar */
+    .k-stats {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-5);
+      padding: var(--space-4) var(--space-5);
+    }
+
+    .k-stat { display: flex; align-items: baseline; gap: 8px; }
+
+    .k-stat-num {
+      font-size: 36px;
+      font-weight: 800;
+      line-height: 1;
+      color: var(--color-primary-light);
+    }
+
+    .k-stat-label { font-size: 14px; color: var(--color-text-muted); }
+
+    .k-stat-note {
+      flex: 1 1 320px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--color-text-muted);
+    }
+
+    /* 提示音解锁引导 / Audio unlock guide */
+    .k-audio-guide {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-3);
+      margin: 0 var(--space-5) var(--space-4);
+      padding: var(--space-4);
+      border: 1px dashed var(--color-primary-light);
+      border-radius: var(--radius-lg);
+      background: rgba(232, 89, 12, 0.16);
+    }
+
+    .k-audio-tip { font-size: 14px; color: var(--color-text-inverse); opacity: 0.8; }
+
+    /* 看板栅格：手机 1 列 / 平板 2 列 / 宽屏 3~4 列 */
+    /* Board grid: 1 column on phones, 2 on tablets, 3-4 on wide screens */
+    .k-board {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--space-4);
+      padding: 0 var(--space-5) var(--space-6);
+    }
+
+    @media (min-width: 640px) {
+      .k-board { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (min-width: 1024px) {
+      .k-board { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    @media (min-width: 1400px) {
+      .k-board { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    /* 订单卡片 / Order card */
+    .k-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      padding: var(--space-4);
+      border: 3px solid var(--color-border-light);
+      border-radius: var(--radius-lg);
+      background: var(--color-surface-2);
+      color: var(--color-text);
+      box-shadow: var(--shadow-md);
+    }
+
+    /* 待接单：高亮边框 + 呼吸动画（纯 CSS 动画）/ Pending: highlight border + breathing */
+    .k-card.pending {
+      border-color: var(--color-warning);
+      animation: k-breathe 1.6s ease-in-out infinite;
+    }
+
+    /* 制作中：普通样式 / Cooking: plain style */
+    .k-card.cooking { border-color: var(--color-info); }
+
+    /* 等待时长分级 / Waiting-time severity */
+    .k-card.wait-orange { box-shadow: inset 0 0 0 6px rgba(240, 140, 0, 0.12), var(--shadow-md); }
+    .k-card.wait-red { box-shadow: inset 0 0 0 6px rgba(224, 49, 49, 0.16), var(--shadow-md); }
+
+    /* 新到订单：8 秒闪烁高亮（放在 pending 之后以覆盖呼吸动画） */
+    /* Newly arrived order: 8s flash (declared after .pending to override it) */
+    .k-card.is-new { animation: k-new 0.7s ease-in-out infinite; }
+
+    /* 已完成（移除前的绿色提示）/ Finishing (green hint before removal) */
+    .k-card.is-finishing {
+      border-color: var(--color-success);
+      animation: none;
+    }
+
+    @keyframes k-breathe {
+      0%, 100% {
+        border-color: var(--color-warning);
+        box-shadow: var(--shadow-md);
+      }
+      50% {
+        border-color: var(--color-primary-light);
+        box-shadow: 0 0 0 7px rgba(232, 89, 12, 0.3), var(--shadow-md);
+      }
+    }
+
+    @keyframes k-new {
+      0%, 100% { background: var(--color-surface-2); }
+      50% { background: #fff2df; }
+    }
+
+    /* 卡片头部：超大桌号 / Card head with a huge table number */
+    .k-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+
+    .k-table {
+      font-size: 56px;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: 2px;
+      color: var(--color-text);
+    }
+
+    .k-card.pending .k-table { color: var(--color-primary-dark); }
+
+    .k-head-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+
+    .k-wait { font-size: 16px; font-weight: 700; color: var(--color-text-muted); }
+    .k-wait.wait-orange { color: var(--color-warning); }
+    .k-wait.wait-red { color: var(--color-danger); }
+
+    .k-meta-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--color-text-muted);
+    }
+
+    /* 菜品列表 / Item list */
+    .k-items {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .k-item {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-3);
+      padding: var(--space-2);
+      border-radius: var(--radius-md);
+      background: var(--color-surface);
+    }
+
+    .k-item.is-done { opacity: 0.5; }
+
+    /* 大号勾选按钮 / Large check button */
+    .k-check {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      border: 3px solid var(--color-primary);
+      border-radius: var(--radius-md);
+      background: #fff;
+      color: #fff;
+      font-size: 32px;
+      font-weight: 900;
+      cursor: pointer;
+      transition: background 0.12s ease;
+    }
+
+    .k-check:hover { background: rgba(232, 89, 12, 0.14); }
+
+    .k-check.is-checked {
+      border-color: var(--color-success);
+      background: var(--color-success);
+    }
+
+    .k-item-main { flex: 1 1 auto; min-width: 0; }
+
+    .k-item-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: var(--space-2);
+    }
+
+    .k-item-name { font-size: 26px; font-weight: 800; line-height: 1.2; }
+
+    /* 数量用更大更粗的字号 / Quantity in a larger, bolder font */
+    .k-item-qty {
+      font-size: 34px;
+      font-weight: 900;
+      line-height: 1;
+      color: var(--color-primary-dark);
+    }
+
+    .k-item.is-done .k-item-name,
+    .k-item.is-done .k-item-qty { text-decoration: line-through; }
+
+    .k-item.is-done .k-item-qty { color: var(--color-text-muted); }
+
+    .k-item-done { font-size: 15px; font-weight: 700; color: var(--color-success); }
+
+    /* 口味备注：警示色 / Taste remark in a warning color */
+    .k-item-remark {
+      margin-top: 2px;
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--color-danger);
+    }
+
+    /* 订单级备注 / Order-level remark */
+    .k-order-remark {
+      padding: 6px 10px;
+      border-left: 4px solid var(--color-danger);
+      border-radius: var(--radius-sm);
+      background: rgba(224, 49, 49, 0.08);
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--color-danger);
+    }
+
+    /* 底部操作区 / Footer actions */
+    .k-actions { display: flex; gap: var(--space-3); margin-top: auto; }
+    .k-actions .btn { flex: 1 1 auto; }
+
+    .k-accept { animation: k-accept-pulse 1.4s ease-in-out infinite; }
+
+    @keyframes k-accept-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.04); }
+    }
+
+    /* 已完成绿色遮罩 / Green finishing overlay */
+    .k-finish-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(47, 158, 68, 0.92);
+      color: #fff;
+      font-size: 40px;
+      font-weight: 900;
+      letter-spacing: 3px;
+      animation: k-pop 0.2s ease-out;
+    }
+
+    @keyframes k-pop {
+      from { transform: scale(0.94); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    /* 空状态 / Empty state */
+    .k-empty { padding: var(--space-6); font-size: 20px; }
+    .k-empty-title { font-size: 30px; font-weight: 800; color: var(--color-text-inverse); }
+  </style>
+</head>
+<body>
+  <div id="app" v-cloak>
+    <!-- 顶部导航 / Top navigation -->
+    <header class="k-topbar">
+      <div class="k-brand">厨房看板</div>
+      <nav class="k-nav">
+        <a href="/counter">柜台点菜</a>
+        <a href="/kitchen" class="active">厨房看板</a>
+        <a href="/stats">营业统计</a>
+        <a href="/admin">菜品管理</a>
+        <a href="/settings">系统设置</a>
+      </nav>
+      <div class="k-topbar-right">
+        <button class="btn ghost" @click="toggleSound">
+          {{ audioEnabled ? '🔔 提示音 开' : '🔕 提示音 关' }}
+        </button>
+        <span class="k-conn">
+          <span class="k-dot" :class="connected ? 'k-dot-on' : 'k-dot-off'"></span>
+          {{ connected ? '已连接' : '已断开' }}
+        </span>
+      </div>
+    </header>
+
+    <!-- 统计与操作说明 / Statistics and operation hint -->
+    <section class="k-stats">
+      <div class="k-stat">
+        <span class="k-stat-num">{{ orders.length }}</span>
+        <span class="k-stat-label">未完成订单</span>
+      </div>
+      <div class="k-stat">
+        <span class="k-stat-num">{{ todayCompleted }}</span>
+        <span class="k-stat-label">今日已完成</span>
+      </div>
+      <div class="k-stat-note">
+        点击菜品前的大方框即可出餐；再次点击「已出」的菜品会直接撤销出餐（无需二次确认）。
+        勾完最后一道菜后，订单会自动完成并短暂提示后移出看板。
+      </div>
+    </section>
+
+    <!-- 提示音解锁引导（浏览器要求先有一次交互）/ Audio unlock guide -->
+    <div class="k-audio-guide" v-if="audioEnabled && !audioUnlocked">
+      <button class="btn primary btn-lg" @click="unlockAudio">🔔 点击启用提示音</button>
+      <span class="k-audio-tip">浏览器要求先有一次点击，才允许自动播放新订单提示音</span>
+    </div>
+
+    <!-- 看板主体：仅展示未完成订单 / Board: only unfinished orders -->
+    <main class="k-board" v-if="orders.length">
+      <article
+        v-for="order in orders"
+        :key="order.id"
+        class="k-card"
+        :class="[order.status, waitClass(order), { 'is-new': order._isNew, 'is-finishing': order._finishing }]"
+      >
+        <div class="k-card-head">
+          <div class="k-table">{{ order.diningType === 'takeaway' ? '打包' : (order.tableNo || '—') }}</div>
+          <div class="k-head-meta">
+            <span class="badge" :class="ROS.statusBadgeClass(order.status)">{{ order.statusText }}</span>
+            <span class="k-wait" :class="waitClass(order)">{{ waitLabel(order) }}</span>
+          </div>
+        </div>
+
+        <div class="k-meta-line">
+          <span>下单 {{ hhmm(order.createdTime) }}</span>
+          <span>{{ order.diningTypeText }}</span>
+          <span>已出 {{ order.completedCount }}/{{ order.itemCount }}</span>
+          <span>{{ order.orderNo }}</span>
+        </div>
+
+        <ul class="k-items">
+          <li
+            v-for="item in order.items"
+            :key="item.id"
+            class="k-item"
+            :class="{ 'is-done': item.status === 'completed' }"
+          >
+            <button
+              type="button"
+              class="k-check"
+              :class="{ 'is-checked': item.status === 'completed' }"
+              :title="item.status === 'completed' ? '点击撤销出餐' : '点击标记出餐'"
+              @click="toggleItem(order, item)"
+            >
+              <span v-if="item.status === 'completed'">✓</span>
+            </button>
+            <div class="k-item-main">
+              <div class="k-item-line">
+                <span class="k-item-name">{{ item.dishName }}</span>
+                <span class="k-item-qty">x{{ item.quantity }}</span>
+                <span class="k-item-done" v-if="item.status === 'completed'">已出</span>
+              </div>
+              <div class="k-item-remark" v-if="item.remark">⚠ {{ item.remark }}</div>
+            </div>
+          </li>
+        </ul>
+
+        <div class="k-order-remark" v-if="order.remark">订单备注：{{ order.remark }}</div>
+
+        <div class="k-actions">
+          <button
+            v-if="order.status === 'pending'"
+            class="btn primary btn-lg k-accept"
+            @click="acceptOrder(order)"
+          >接单</button>
+          <button class="btn success btn-lg" @click="completeAll(order)">全部出餐</button>
+        </div>
+
+        <div class="k-finish-overlay" v-if="order._finishing">✓ 已完成</div>
+      </article>
+    </main>
+
+    <!-- 空状态 / Empty state -->
+    <div class="empty k-empty" v-else>
+      <div class="k-empty-title">暂无待处理订单</div>
+      <div>新订单会自动出现在这里</div>
+    </div>
+  </div>
+
+  <!-- 离线本地依赖，禁止 CDN / Offline local dependencies, no CDN -->
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/sse.js"></script>
+  <script src="/static/js/common.js"></script>
+  <script>
+    /* ========================================================================
+     * 厨房看板页面逻辑 / Kitchen board page logic
+     * 依赖 / Depends on: Vue（本地全局构建）、ROS（api.js / sse.js / common.js）
+     * ====================================================================== */
+    (function () {
+      "use strict";
+
+      // 本地存储键：提示音开关 / localStorage key for the sound toggle
+      var SOUND_KEY = "ros_kitchen_sound";
+      // 新到订单高亮时长（毫秒）/ Highlight duration for a newly arrived order (ms)
+      var NEW_FLASH_MS = 8000;
+      // 已完成提示停留时长（毫秒）/ How long the "completed" hint stays (ms)
+      var FINISH_HOLD_MS = 2000;
+      // 连接存活判定超时（毫秒），心跳每 15 秒一次 / Liveness timeout (ms), heartbeat is 15s
+      var ALIVE_TIMEOUT_MS = 40000;
+
+      var app = Vue.createApp({
+        /**
+         * 组件数据 / Component state.
+         */
+        data: function () {
+          return {
+            // 共享工具集 / Shared helper namespace
+            ROS: window.ROS,
+            // 看板订单（仅 pending / cooking）/ Board orders (pending / cooking only)
+            orders: [],
+            // 今日已完成订单数 / Completed order count for today
+            todayCompleted: 0,
+            // SSE 连接状态 / SSE connection status
+            connected: false,
+            // 提示音开关 / Sound toggle
+            audioEnabled: true,
+            // 音频是否已解锁（浏览器自动播放策略）/ Whether audio is unlocked
+            audioUnlocked: true,
+            // 时钟刻度，驱动等待时长重算 / Clock tick driving waiting-time recompute
+            nowTs: Date.now(),
+            // 未读新订单数（标签页标题闪烁）/ Unread new-order count for title flashing
+            unreadCount: 0
+          };
+        },
+
+        methods: {
+          /**
+           * 按创建时间倒序比较（越新越靠前）。
+           * Compare two orders by creation time descending (newest first).
+           * @param {object} a 订单 / order
+           * @param {object} b 订单 / order
+           * @returns {number} 排序结果 / sort result
+           */
+          byCreatedDesc: function (a, b) {
+            var ta = new Date(a.createdTime).getTime() || 0;
+            var tb = new Date(b.createdTime).getTime() || 0;
+            if (tb !== ta) {
+              return tb - ta;
+            }
+            return (b.id || 0) - (a.id || 0);
+          },
+
+          /**
+           * 让看板订单按创建时间倒序排列。
+           * Sort board orders by creation time descending.
+           */
+          sortOrders: function () {
+            this.orders = this.orders.slice().sort(this.byCreatedDesc);
+          },
+
+          /**
+           * 按 ID 查找看板中的订单。
+           * Find a board order by id.
+           * @param {number} id 订单 ID / order id
+           * @returns {object|null} 订单或 null / order or null
+           */
+          findOrder: function (id) {
+            for (var i = 0; i < this.orders.length; i += 1) {
+              if (this.orders[i].id === id) {
+                return this.orders[i];
+              }
+            }
+            return null;
+          },
+
+          /**
+           * 插入或更新一张订单卡片（保留内部标记）。
+           * Insert or update an order card, preserving internal flags.
+           * @param {object} order 订单视图 / order view
+           */
+          upsertOrder: function (order) {
+            if (!order) {
+              return;
+            }
+            var list = this.orders.slice();
+            var idx = -1;
+            for (var i = 0; i < list.length; i += 1) {
+              if (list[i].id === order.id) {
+                idx = i;
+                break;
+              }
+            }
+            if (idx >= 0) {
+              // 保留「新单高亮 / 完成中」标记 / Keep the new/finishing flags
+              var isNew = list[idx]._isNew;
+              var finishing = list[idx]._finishing;
+              Object.assign(list[idx], order);
+              list[idx]._isNew = isNew;
+              list[idx]._finishing = finishing;
+            } else {
+              list.push(Object.assign({ _isNew: false, _finishing: false }, order));
+            }
+            this.orders = list;
+            this.sortOrders();
+          },
+
+          /**
+           * 根据订单最新状态更新看板（核心分发）。
+           * Apply the latest order status to the board (core dispatcher).
+           * @param {object} order 订单视图 / order view
+           */
+          applyOrder: function (order) {
+            if (!order) {
+              return;
+            }
+            if (order.status === "pending" || order.status === "cooking") {
+              // 未完成订单：插入或刷新 / Unfinished order: insert or refresh
+              this.upsertOrder(order);
+              return;
+            }
+            if (order.status === "completed") {
+              // 已完成：先绿色提示 2 秒再移除 / Completed: green hint for 2s then remove
+              var existing = this.findOrder(order.id);
+              if (existing && !existing._finishing) {
+                this.finishOrder(existing);
+              }
+              return;
+            }
+            // settled / cancelled：直接从看板移除 / Remove settled/cancelled from the board
+            if (this.findOrder(order.id)) {
+              this.orders = this.orders.filter(function (o) {
+                return o.id !== order.id;
+              });
+            }
+          },
+
+          /**
+           * 新到订单：短暂闪烁高亮后恢复。
+           * Newly arrived order: flash briefly then restore.
+           * @param {object} order 订单视图 / order view
+           */
+          flashNewOrder: function (order) {
+            var target = this.findOrder(order.id);
+            if (!target) {
+              return;
+            }
+            target._isNew = true;
+            setTimeout(function () {
+              target._isNew = false;
+            }, NEW_FLASH_MS);
+          },
+
+          /**
+           * 标记订单已完成，绿色提示后移出看板。
+           * Mark an order as completed, show a green hint, then remove it.
+           * @param {object} order 看板订单对象 / board order object
+           */
+          finishOrder: function (order) {
+            var self = this;
+            order._finishing = true;
+            this.refreshToday();
+            setTimeout(function () {
+              self.orders = self.orders.filter(function (o) {
+                return o.id !== order.id;
+              });
+            }, FINISH_HOLD_MS);
+          },
+
+          /**
+           * 把 ISO 时间格式化为 HH:mm。
+           * Format an ISO time string as HH:mm.
+           * @param {string} iso ISO 时间 / ISO time
+           * @returns {string} HH:mm
+           */
+          hhmm: function (iso) {
+            if (!iso) {
+              return "";
+            }
+            var d = new Date(iso);
+            if (isNaN(d.getTime())) {
+              return "";
+            }
+            var h = d.getHours();
+            var m = d.getMinutes();
+            return (h < 10 ? "0" + h : h) + ":" + (m < 10 ? "0" + m : m);
+          },
+
+          /**
+           * 计算订单已等待分钟数。
+           * Compute how many minutes the order has been waiting.
+           * @param {object} order 订单 / order
+           * @returns {number} 等待分钟数 / waiting minutes
+           */
+          waitMinutes: function (order) {
+            if (!order || !order.createdTime) {
+              return 0;
+            }
+            var created = new Date(order.createdTime).getTime();
+            if (isNaN(created)) {
+              return 0;
+            }
+            return Math.max(0, Math.floor((this.nowTs - created) / 60000));
+          },
+
+          /**
+           * 等待时长分级样式：>15 分钟红、>8 分钟橙。
+           * Severity class for waiting time: red over 15 min, orange over 8 min.
+           * @param {object} order 订单 / order
+           * @returns {string} 样式类 / style class
+           */
+          waitClass: function (order) {
+            var minutes = this.waitMinutes(order);
+            if (minutes > 15) {
+              return "wait-red";
+            }
+            if (minutes > 8) {
+              return "wait-orange";
+            }
+            return "";
+          },
+
+          /**
+           * 等待时长文案。
+           * Waiting-time label.
+           * @param {object} order 订单 / order
+           * @returns {string} 文案 / label
+           */
+          waitLabel: function (order) {
+            var minutes = this.waitMinutes(order);
+            if (minutes < 1) {
+              return "刚刚下单";
+            }
+            return "已等 " + minutes + " 分钟";
+          },
+
+          /**
+           * 今天日期（YYYY-MM-DD）。
+           * Today's date as YYYY-MM-DD.
+           * @returns {string} 日期字符串 / date string
+           */
+          todayStr: function () {
+            var d = new Date();
+            var m = d.getMonth() + 1;
+            var day = d.getDate();
+            return (
+              d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day)
+            );
+          },
+
+          /**
+           * 统计今日已完成订单数（completed 与 settled 都算已完成）。
+           * Count today's finished orders (both completed and settled count).
+           */
+          refreshToday: function () {
+            var self = this;
+            ROS.get("/api/orders", { date: this.todayStr() })
+              .then(function (list) {
+                self.todayCompleted = (list || []).filter(function (o) {
+                  return o.status === "completed" || o.status === "settled";
+                }).length;
+              })
+              .catch(function () {
+                // 统计失败不打断主流程 / Statistics failure must not break the flow
+              });
+          },
+
+          /**
+           * 全量拉取未完成订单（初始加载与断线重连都调用）。
+           * Full-fetch unfinished orders (used on initial load and after reconnect).
+           * @returns {Promise} 请求完成承诺 / promise of the request
+           */
+          loadOrders: function () {
+            var self = this;
+            return ROS.get("/api/orders", { status: "pending,cooking", limit: 100 })
+              .then(function (list) {
+                var arr = (list || []).map(function (o) {
+                  return Object.assign({ _isNew: false, _finishing: false }, o);
+                });
+                arr.sort(self.byCreatedDesc);
+                self.orders = arr;
+                self.setConnected(true);
+              })
+              .catch(function (err) {
+                self.setConnected(false);
+                ROS.toast("加载订单失败：" + err.message, "error");
+              });
+          },
+
+          /**
+           * 设置连接状态。
+           * Set the connection status.
+           * @param {boolean} value 是否已连接 / whether connected
+           */
+          setConnected: function (value) {
+            this.connected = !!value;
+          },
+
+          /**
+           * 收到任意事件：标记连接存活并重置存活看门狗。
+           * On any event: mark alive and reset the liveness watchdog.
+           */
+          markConnected: function () {
+            var self = this;
+            this.setConnected(true);
+            if (this._aliveTimer) {
+              clearTimeout(this._aliveTimer);
+            }
+            this._aliveTimer = setTimeout(function () {
+              // 长时间收不到事件视为断开 / No events for a long time means disconnected
+              self.setConnected(false);
+            }, ALIVE_TIMEOUT_MS);
+          },
+
+          /**
+           * 接单：把订单状态置为 cooking。
+           * Accept an order by moving its status to cooking.
+           * @param {object} order 订单 / order
+           */
+          acceptOrder: function (order) {
+            var self = this;
+            ROS.patch("/api/orders/" + order.id + "/status", { status: "cooking" })
+              .then(function (updated) {
+                self.applyOrder(updated);
+              })
+              .catch(function (err) {
+                ROS.toast("接单失败：" + err.message, "error");
+              });
+          },
+
+          /**
+           * 切换单道菜品出餐状态（出餐 / 撤销）。
+           * Toggle a single item status (serve / undo).
+           * @param {object} order 订单 / order
+           * @param {object} item 明细 / item
+           */
+          toggleItem: function (order, item) {
+            var self = this;
+            var target = item.status === "completed" ? "pending" : "completed";
+            ROS.patch(
+              "/api/orders/" + order.id + "/items/" + item.id + "/status",
+              { status: target }
+            )
+              .then(function (updated) {
+                self.applyOrder(updated);
+              })
+              .catch(function (err) {
+                ROS.toast("操作失败：" + err.message, "error");
+              });
+          },
+
+          /**
+           * 全部出餐：一次性把订单下所有菜品置为已完成。
+           * Serve all: mark every item of the order as completed at once.
+           * @param {object} order 订单 / order
+           */
+          completeAll: function (order) {
+            var self = this;
+            ROS.patch("/api/orders/" + order.id + "/items/complete-all")
+              .then(function (updated) {
+                self.applyOrder(updated);
+              })
+              .catch(function (err) {
+                ROS.toast("全部出餐失败：" + err.message, "error");
+              });
+          },
+
+          /**
+           * 处理一条 SSE 事件。
+           * Handle a single SSE event.
+           * @param {string} name 事件名 / event name
+           * @param {object} data 事件数据（OrderOut）/ event payload (OrderOut)
+           */
+          handleEvent: function (name, data) {
+            this.markConnected();
+            if (name === "heartbeat") {
+              return;
+            }
+            if (name === "order.created") {
+              this.upsertOrder(data);
+              this.flashNewOrder(data);
+              this.unreadCount += 1;
+              this.startTitleFlash();
+              this.beepNewOrder();
+              ROS.toast(
+                "新订单：" + (data.tableNo || data.diningTypeText || ""),
+                "warning"
+              );
+              return;
+            }
+            if (name === "order.status_changed" || name === "order.item_status_changed") {
+              this.applyOrder(data);
+            }
+          },
+
+          /**
+           * 新订单提示音（连响两声）。
+           * New-order beep (two short tones).
+           */
+          beepNewOrder: function () {
+            if (!this.audioEnabled) {
+              return;
+            }
+            ROS.beep(880);
+            setTimeout(function () {
+              ROS.beep(1180);
+            }, 220);
+          },
+
+          /**
+           * 切换提示音开关并持久化。
+           * Toggle the sound switch and persist it.
+           */
+          toggleSound: function () {
+            this.audioEnabled = !this.audioEnabled;
+            try {
+              localStorage.setItem(SOUND_KEY, this.audioEnabled ? "1" : "0");
+            } catch (err) {
+              // 忽略存储失败 / Ignore storage failures
+            }
+            if (this.audioEnabled) {
+              ROS.beep(980);
+            }
+          },
+
+          /**
+           * 探测音频是否已解锁（浏览器自动播放策略）。
+           * Probe whether audio is unlocked (browser autoplay policy).
+           */
+          probeAudio: function () {
+            var Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) {
+              this.audioUnlocked = true;
+              return;
+            }
+            try {
+              var ctx = new Ctx();
+              this.audioUnlocked = ctx.state === "running";
+              if (ctx.close) {
+                ctx.close();
+              }
+            } catch (err) {
+              this.audioUnlocked = true;
+            }
+          },
+
+          /**
+           * 用户交互后解锁音频（播放一次测试音）。
+           * Unlock audio after a user gesture (play one test tone).
+           */
+          unlockAudio: function () {
+            var Ctx = window.AudioContext || window.webkitAudioContext;
+            if (Ctx) {
+              try {
+                var ctx = new Ctx();
+                if (ctx.state === "suspended" && ctx.resume) {
+                  ctx.resume();
+                }
+                if (ctx.close) {
+                  ctx.close();
+                }
+              } catch (err) {
+                // 忽略音频失败 / Ignore audio failures
+              }
+            }
+            this.audioUnlocked = true;
+            if (this.audioEnabled) {
+              ROS.beep(980);
+            }
+          },
+
+          /**
+           * 开始闪烁浏览器标签页标题。
+           * Start flashing the browser tab title.
+           */
+          startTitleFlash: function () {
+            var self = this;
+            if (this._titleTimer) {
+              return;
+            }
+            var on = false;
+            this._titleTimer = setInterval(function () {
+              on = !on;
+              document.title = on
+                ? "(" + self.unreadCount + ") 新订单 - 厨房看板"
+                : "厨房看板";
+            }, 800);
+          },
+
+          /**
+           * 停止标签页标题闪烁并复位。
+           * Stop the title flashing and reset it.
+           */
+          stopTitleFlash: function () {
+            if (this._titleTimer) {
+              clearInterval(this._titleTimer);
+              this._titleTimer = null;
+            }
+            document.title = "厨房看板";
+          }
+        },
+
+        /**
+         * 挂载：初始化偏好、加载数据、建立实时流。
+         * Mount: initialise preferences, load data and open the realtime stream.
+         */
+        mounted: function () {
+          var self = this;
+
+          // 读取提示音偏好 / Load the sound preference
+          try {
+            if (localStorage.getItem(SOUND_KEY) === "0") {
+              this.audioEnabled = false;
+            }
+          } catch (err) {
+            // 忽略存储失败 / Ignore storage failures
+          }
+
+          // 探测音频解锁状态 / Probe the audio unlock state
+          this.probeAudio();
+
+          // 首次任意交互时自动解锁音频 / Auto-unlock audio on the first interaction
+          var unlockOnce = function () {
+            if (!self.audioUnlocked) {
+              self.unlockAudio();
+            }
+            document.removeEventListener("click", unlockOnce, true);
+            document.removeEventListener("touchstart", unlockOnce, true);
+          };
+          document.addEventListener("click", unlockOnce, true);
+          document.addEventListener("touchstart", unlockOnce, true);
+
+          // 每 30 秒刷新一次等待时长（满足每分钟刷新）/ Refresh waiting time every 30s
+          this._tickTimer = setInterval(function () {
+            self.nowTs = Date.now();
+          }, 30000);
+
+          // 标签页重新聚焦时清除新订单提醒 / Clear the unread hint when the tab regains focus
+          this._focusHandler = function () {
+            self.unreadCount = 0;
+            self.stopTitleFlash();
+          };
+          window.addEventListener("focus", this._focusHandler);
+
+          // 初始全量加载 / Initial full load
+          this.loadOrders();
+          this.refreshToday();
+
+          // 建立实时事件流 / Open the realtime event stream
+          this._stream = ROS.connectStream({
+            onEvent: function (name, data) {
+              self.handleEvent(name, data);
+            },
+            onReconnect: function () {
+              // 重连后先全量拉取一次，避免漏单
+              // Full reload after reconnect so no order is missed
+              self.setConnected(true);
+              self.loadOrders();
+              self.refreshToday();
+            }
+          });
+        },
+
+        /**
+         * 卸载前清理定时器与连接。
+         * Clean up timers and the stream before unmounting.
+         */
+        beforeUnmount: function () {
+          if (this._stream) {
+            this._stream.close();
+          }
+          if (this._tickTimer) {
+            clearInterval(this._tickTimer);
+          }
+          if (this._aliveTimer) {
+            clearTimeout(this._aliveTimer);
+          }
+          if (this._titleTimer) {
+            clearInterval(this._titleTimer);
+          }
+          if (this._focusHandler) {
+            window.removeEventListener("focus", this._focusHandler);
+          }
+        }
+      });
+
+      app.mount("#app");
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>菜品管理 - 餐饮小店点菜系统</title>
+  <!-- 基础设计系统 / Base design system -->
+  <link rel="stylesheet" href="/static/css/base.css">
+  <!-- 离线第三方库与共享脚本（顺序不可变）/ Offline vendor lib and shared scripts (order matters) -->
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/sse.js"></script>
+  <script src="/static/js/common.js"></script>
+  <style>
+    /* ==========================================================================
+     * 菜品管理页专属样式（复用 base.css 的设计令牌）
+     * Page-specific styles for the dish management page.
+     * ========================================================================== */
+
+    /* 整页骨架 / Full-height shell */
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* 顶部导航 / Top navigation */
+    .topbar {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      padding: var(--space-3) var(--space-5);
+      background: var(--color-bg);
+      color: var(--color-text-inverse);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .topbar .brand {
+      font-size: 18px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .topbar .nav {
+      display: flex;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
+
+    .topbar .nav a {
+      color: var(--color-text-inverse);
+      text-decoration: none;
+      padding: 6px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 15px;
+      opacity: 0.78;
+      transition: background 0.15s ease, opacity 0.15s ease;
+    }
+
+    .topbar .nav a:hover {
+      background: rgba(255, 255, 255, 0.12);
+      opacity: 1;
+    }
+
+    .topbar .nav a.active {
+      background: var(--color-primary);
+      opacity: 1;
+    }
+
+    .topbar .spacer {
+      flex: 1 1 auto;
+    }
+
+    /* 主区域：左分类 + 右菜品 / Main grid: left categories + right dishes */
+    .main {
+      flex: 1 1 auto;
+      display: grid;
+      grid-template-columns: 340px minmax(0, 1fr);
+      gap: var(--space-4);
+      padding: var(--space-4);
+      align-items: start;
+    }
+
+    /* 通用面板 / Generic panel */
+    .panel {
+      background: var(--color-surface-2);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--color-border-light);
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .panel-body {
+      padding: var(--space-4);
+    }
+
+    /* 小按钮 / Small buttons */
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    .btn-xs {
+      padding: 4px 8px;
+      font-size: 12px;
+      border-radius: var(--radius-sm);
+    }
+
+    /* 复选说明 / Checkbox label */
+    .inline-check {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--color-text-muted);
+      white-space: nowrap;
+    }
+
+    /* 分类列表 / Category list */
+    .cat-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .cat-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-3);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-md);
+      background: var(--color-surface-2);
+    }
+
+    .cat-row.active {
+      border-color: var(--color-primary);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .cat-row.muted {
+      opacity: 0.6;
+    }
+
+    .cat-name {
+      font-weight: 600;
+    }
+
+    .cat-meta {
+      font-size: 12px;
+      color: var(--color-text-muted);
+    }
+
+    .cat-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    /* 菜品表格 / Dish table */
+    .dish-body {
+      overflow-x: auto;
+    }
+
+    tr.inactive {
+      opacity: 0.55;
+    }
+
+    .cell-price {
+      color: var(--color-primary);
+      font-weight: 600;
+    }
+
+    .cell-actions {
+      white-space: nowrap;
+    }
+
+    .cat-select {
+      width: auto;
+      min-width: 140px;
+    }
+
+    .wrap {
+      flex-wrap: wrap;
+    }
+
+    .hint {
+      margin-top: var(--space-3);
+      font-size: 12px;
+      color: var(--color-text-muted);
+    }
+
+    /* 表单字段 / Form field */
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: var(--space-3);
+    }
+
+    .field-label {
+      font-size: 13px;
+      color: var(--color-text-muted);
+    }
+
+    /* 弹窗标题 / Modal title */
+    .modal-title {
+      margin: 0 0 var(--space-3);
+      font-size: 18px;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--space-2);
+      margin-top: var(--space-4);
+    }
+
+    /* 确认弹窗行 / Confirm modal lines */
+    .confirm-lines {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      margin: var(--space-3) 0;
+    }
+
+    .confirm-line {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+
+    .confirm-line .k {
+      color: var(--color-text-muted);
+    }
+
+    .confirm-line .v {
+      font-weight: 600;
+      text-align: right;
+    }
+
+    /* 窄屏回退：单列 / Narrow-screen fallback: single column */
+    @media (max-width: 900px) {
+      .main {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Vue 挂载点 / Vue mount point -->
+  <div id="app" class="app-shell">
+    <!-- 顶部导航 / Top navigation -->
+    <header class="topbar">
+      <div class="brand">{{ shopName }}</div>
+      <nav class="nav">
+        <a href="/counter">柜台点菜</a>
+        <a href="/kitchen">厨房看板</a>
+        <a href="/stats">营业统计</a>
+        <a href="/admin" class="active">菜品管理</a>
+        <a href="/settings">系统设置</a>
+      </nav>
+      <div class="spacer"></div>
+    </header>
+
+    <main class="main">
+      <!-- 左区：分类管理 / Left: category management -->
+      <section class="panel">
+        <div class="panel-head row gap-2 wrap">
+          <span class="grow">分类</span>
+          <label class="inline-check">
+            <input type="checkbox" v-model="showInactiveCategories" />
+            显示已停用
+          </label>
+          <button class="btn primary btn-sm" @click="openCategoryModal(null)">新增分类</button>
+        </div>
+        <div class="panel-body">
+          <div class="cat-list" v-if="displayCategories.length">
+            <div
+              class="cat-row"
+              v-for="c in displayCategories"
+              :key="c.id"
+              :class="{ muted: !c.isActive, active: categoryFilter === c.id }"
+            >
+              <div class="grow" @click="selectCategory(c.id)" style="cursor: pointer;">
+                <div class="cat-name">
+                  {{ c.name }}
+                  <span class="tag" v-if="!c.isActive">已停用</span>
+                </div>
+                <div class="cat-meta">{{ dishCount(c.id) }} 个菜品 · 排序 {{ c.sortOrder }}</div>
+              </div>
+              <div class="cat-actions">
+                <button class="btn ghost btn-xs" @click="openCategoryModal(c)">编辑</button>
+                <button
+                  class="btn ghost btn-xs"
+                  v-if="c.isActive"
+                  @click="toggleCategoryActive(c, false)"
+                >停用</button>
+                <button
+                  class="btn ghost btn-xs"
+                  v-else
+                  @click="toggleCategoryActive(c, true)"
+                >启用</button>
+                <button
+                  class="btn danger btn-xs"
+                  v-if="c.isActive"
+                  @click="confirmDeleteCategory(c)"
+                >删除</button>
+              </div>
+            </div>
+          </div>
+          <div class="empty" v-else>暂无分类，点击右上角「新增分类」</div>
+        </div>
+      </section>
+
+      <!-- 右区：菜品管理 / Right: dish management -->
+      <section class="panel">
+        <div class="panel-head row gap-2 wrap">
+          <span class="grow">菜品</span>
+          <select class="select cat-select" v-model="categoryFilter">
+            <option :value="null">全部分类</option>
+            <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
+          <label class="inline-check">
+            <input type="checkbox" v-model="showInactiveDishes" />
+            显示已停用
+          </label>
+          <button class="btn primary btn-sm" @click="openDishModal(null)">新增菜品</button>
+        </div>
+        <div class="panel-body dish-body">
+          <table class="table" v-if="displayDishes.length">
+            <thead>
+              <tr>
+                <th>菜名</th>
+                <th>分类</th>
+                <th>价格</th>
+                <th>单位</th>
+                <th>排序</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="d in displayDishes" :key="d.id" :class="{ inactive: !d.isActive }">
+                <td>{{ d.name }}</td>
+                <td>{{ categoryName(d.categoryId) }}</td>
+                <td class="cell-price">{{ money(d.price) }}</td>
+                <td>{{ d.unit }}</td>
+                <td>{{ d.sortOrder }}</td>
+                <td>
+                  <span class="badge" :class="statusBadge(d)">{{ dishStatusText(d) }}</span>
+                </td>
+                <td class="cell-actions">
+                  <template v-if="d.isActive">
+                    <button
+                      class="btn ghost btn-xs"
+                      @click="toggleAvailability(d)"
+                    >{{ d.isAvailable ? '标为售罄' : '恢复在售' }}</button>
+                    <button class="btn ghost btn-xs" @click="openDishModal(d)">编辑</button>
+                    <button
+                      class="btn danger btn-xs"
+                      @click="confirmDeleteDish(d)"
+                    >删除</button>
+                  </template>
+                  <button
+                    v-else
+                    class="btn ghost btn-xs"
+                    @click="restoreDish(d)"
+                  >启用</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="empty" v-else>暂无菜品，点击右上角「新增菜品」</div>
+          <div class="hint" v-if="displayDishes.some(function (d) { return !d.isActive; })">
+            已停用菜品不会出现在点菜页与菜单中，历史订单不受影响，可点「启用」恢复
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 分类弹窗 / Category modal -->
+    <div class="modal" :hidden="!categoryModal.show">
+      <div class="modal-content">
+        <h3 class="modal-title">{{ categoryModal.id ? '编辑分类' : '新增分类' }}</h3>
+        <label class="field">
+          <span class="field-label">分类名称</span>
+          <input class="input" v-model.trim="categoryModal.name" placeholder="如 热菜" />
+        </label>
+        <label class="field">
+          <span class="field-label">排序（数字越小越靠前）</span>
+          <input class="input" type="number" v-model.number="categoryModal.sortOrder" />
+        </label>
+        <div class="modal-actions">
+          <button class="btn ghost" @click="closeCategoryModal">取消</button>
+          <button class="btn primary" :disabled="saving" @click="saveCategory">
+            {{ saving ? '保存中…' : '保存' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 菜品弹窗 / Dish modal -->
+    <div class="modal" :hidden="!dishModal.show">
+      <div class="modal-content">
+        <h3 class="modal-title">{{ dishModal.id ? '编辑菜品' : '新增菜品' }}</h3>
+        <label class="field">
+          <span class="field-label">分类（仅可选未停用分类）</span>
+          <select class="select" v-model.number="dishModal.categoryId">
+            <option :value="null" disabled>请选择分类</option>
+            <option v-for="c in activeCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">菜名</span>
+          <input class="input" v-model.trim="dishModal.name" placeholder="如 宫保鸡丁" />
+        </label>
+        <div class="row gap-3">
+          <label class="field grow">
+            <span class="field-label">价格（元）</span>
+            <input
+              class="input"
+              type="text"
+              inputmode="decimal"
+              v-model.trim="dishModal.price"
+              placeholder="如 28 或 28.5"
+            />
+          </label>
+          <label class="field grow">
+            <span class="field-label">单位</span>
+            <input class="input" v-model.trim="dishModal.unit" placeholder="份" />
+          </label>
+        </div>
+        <label class="field">
+          <span class="field-label">描述（可选）</span>
+          <input class="input" v-model.trim="dishModal.description" placeholder="如 微辣" />
+        </label>
+        <label class="field">
+          <span class="field-label">排序（数字越小越靠前）</span>
+          <input class="input" type="number" v-model.number="dishModal.sortOrder" />
+        </label>
+        <div class="modal-actions">
+          <button class="btn ghost" @click="closeDishModal">取消</button>
+          <button class="btn primary" :disabled="saving" @click="saveDish">
+            {{ saving ? '保存中…' : '保存' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 通用确认弹窗 / Generic confirm modal -->
+    <div class="modal" :hidden="!confirmModal.show">
+      <div class="modal-content">
+        <h3 class="modal-title">{{ confirmModal.title }}</h3>
+        <div class="confirm-lines">
+          <div class="confirm-line" v-for="(line, i) in confirmModal.lines" :key="i">
+            <span class="k">{{ line.k }}</span>
+            <span class="v">{{ line.v }}</span>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn ghost" @click="closeConfirm">取消</button>
+          <button
+            class="btn"
+            :class="confirmModal.danger ? 'danger' : 'primary'"
+            @click="runConfirm"
+          >{{ confirmModal.confirmText }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ==========================================================================
+     * 菜品管理页应用逻辑 / Dish management page application logic
+     * 依赖 / Depends on: Vue（全局）、ROS.get/post/put/patch/del、ROS.formatMoney/toast
+     * ========================================================================== */
+    (function () {
+      "use strict";
+
+      // 待执行的确认动作（放在组件外，避免被响应式包装）
+      // Pending confirm action (kept outside the component to avoid reactivity wrapping)
+      var pendingAction = null;
+
+      /**
+       * 把用户输入的元金额格式化为两位小数字符串
+       * Normalize a user-entered yuan amount into a two-decimal string.
+       * @param {string|number} input 用户输入（如 "28" / "28.5"）/ user input
+       * @returns {string|null} 如 "28.00"，非法或非正数返回 null
+       *          / e.g. "28.00", returns null when invalid or non-positive
+       */
+      function toYuanString(input) {
+        var raw = String(input === null || input === undefined ? "" : input).trim();
+        if (!raw) {
+          return null;
+        }
+        var num = Number(raw);
+        if (!isFinite(num) || num <= 0) {
+          return null;
+        }
+        return num.toFixed(2);
+      }
+
+      Vue.createApp({
+        /**
+         * 组件初始数据 / Component initial data.
+         */
+        data: function () {
+          return {
+            // 店名（顶部导航展示）/ Shop name (shown in the top bar)
+            shopName: "菜品管理",
+            // 分类列表 / Category list
+            categories: [],
+            // 菜品列表 / Dish list
+            dishes: [],
+            // 分类是否显示已停用 / Whether to show inactive categories
+            showInactiveCategories: false,
+            // 菜品是否显示已停用 / Whether to show inactive dishes
+            showInactiveDishes: false,
+            // 当前分类筛选，null 表示全部 / Active category filter, null means all
+            categoryFilter: null,
+            // 是否正在保存 / Whether a save is in progress
+            saving: false,
+
+            // 分类弹窗状态 / Category modal state
+            categoryModal: { show: false, id: null, name: "", sortOrder: 0 },
+            // 菜品弹窗状态 / Dish modal state
+            dishModal: {
+              show: false,
+              id: null,
+              categoryId: null,
+              name: "",
+              price: "",
+              unit: "份",
+              description: "",
+              sortOrder: 0,
+            },
+            // 通用确认弹窗状态 / Generic confirm modal state
+            confirmModal: {
+              show: false,
+              title: "",
+              lines: [],
+              confirmText: "确认",
+              danger: false,
+            },
+          };
+        },
+
+        computed: {
+          /**
+           * 需要展示的分类（按「显示已停用」过滤）
+           * Categories to display, filtered by the "show inactive" toggle.
+           * @returns {Array} 分类列表 / category list
+           */
+          displayCategories: function () {
+            var list = this.categories.slice();
+            if (!this.showInactiveCategories) {
+              list = list.filter(function (c) {
+                return c.isActive;
+              });
+            }
+            return list;
+          },
+
+          /**
+           * 未停用的分类（供菜品下拉使用）
+           * Active categories, used by the dish form's category select.
+           * @returns {Array} 分类列表 / category list
+           */
+          activeCategories: function () {
+            return this.categories.filter(function (c) {
+              return c.isActive;
+            });
+          },
+
+          /**
+           * 每个分类下的菜品数量映射（含已停用菜品，与后端删除校验口径一致）
+           * Map of dish count per category id, counting inactive dishes too so it
+           * matches the server-side delete guard.
+           * @returns {Object} 分类 ID 到数量的映射 / mapping of category id to count
+           */
+          categoryDishCounts: function () {
+            var map = {};
+            this.dishes.forEach(function (d) {
+              map[d.categoryId] = (map[d.categoryId] || 0) + 1;
+            });
+            return map;
+          },
+
+          /**
+           * 需要展示的菜品（按分类与「显示已停用」筛选）
+           * Dishes to display, filtered by the category and the "show inactive"
+           * toggle.
+           * @returns {Array} 菜品列表 / dish list
+           */
+          displayDishes: function () {
+            var showInactive = this.showInactiveDishes;
+            var filter = this.categoryFilter;
+            return this.dishes.filter(function (d) {
+              if (!showInactive && !d.isActive) {
+                return false;
+              }
+              if (filter === null || filter === undefined) {
+                return true;
+              }
+              return d.categoryId === filter;
+            });
+          },
+        },
+
+        methods: {
+          /**
+           * 格式化金额（带 ¥ 前缀）/ Format an amount with a ¥ prefix.
+           * @param {string|number} value 金额 / amount
+           * @returns {string} 如 "¥28.00" / e.g. "¥28.00"
+           */
+          money: function (value) {
+            return "¥" + ROS.formatMoney(value);
+          },
+
+          /**
+           * 分类名称（找不到时提示已删除）
+           * Category name; falls back to a hint when missing.
+           * @param {number} id 分类 ID / category id
+           * @returns {string} 分类名称 / category name
+           */
+          categoryName: function (id) {
+            var found = this.categories.find(function (c) {
+              return c.id === id;
+            });
+            return found ? found.name : "（分类已删除）";
+          },
+
+          /**
+           * 某分类下的菜品数量 / Dish count of a category.
+           * @param {number} id 分类 ID / category id
+           * @returns {number} 菜品数量 / dish count
+           */
+          dishCount: function (id) {
+            return this.categoryDishCounts[id] || 0;
+          },
+
+          /**
+           * 菜品状态中文文案 / Chinese text of a dish status.
+           * @param {object} dish 菜品 / dish
+           * @returns {string} 在售 / 售罄 / 已停用 / Chinese status text
+           */
+          dishStatusText: function (dish) {
+            if (!dish.isActive) {
+              return "已停用";
+            }
+            if (!dish.isAvailable) {
+              return "售罄";
+            }
+            return "在售";
+          },
+
+          /**
+           * 菜品状态对应的徽标样式类 / Badge style class for a dish status.
+           * @param {object} dish 菜品 / dish
+           * @returns {string} 样式类名 / style class name
+           */
+          statusBadge: function (dish) {
+            if (!dish.isActive) {
+              return "badge";
+            }
+            if (!dish.isAvailable) {
+              return "badge-pending";
+            }
+            return "badge-completed";
+          },
+
+          /**
+           * 选中某个分类进行筛选 / Select a category as the dish filter.
+           * @param {number} id 分类 ID / category id
+           */
+          selectCategory: function (id) {
+            this.categoryFilter = this.categoryFilter === id ? null : id;
+          },
+
+          /**
+           * 加载分类与菜品 / Load categories and dishes.
+           * @returns {Promise<void>} 无 / none
+           */
+          loadAll: function () {
+            return Promise.all([this.loadCategories(), this.loadDishes()]);
+          },
+
+          /**
+           * 加载分类列表 / Load the category list.
+           * @returns {Promise<void>} 无 / none
+           */
+          loadCategories: function () {
+            var self = this;
+            return ROS.get("/api/categories", {
+              includeInactive: this.showInactiveCategories,
+            })
+              .then(function (list) {
+                self.categories = Array.isArray(list) ? list : [];
+              })
+              .catch(function (err) {
+                ROS.toast("分类加载失败：" + ((err && err.message) || err), "error");
+              });
+          },
+
+          /**
+           * 加载菜品列表（始终含已停用，保证分类菜品数量统计准确）
+           * Load the dish list, always including inactive dishes so the
+           * per-category dish count matches the server-side delete guard.
+           * @returns {Promise<void>} 无 / none
+           */
+          loadDishes: function () {
+            var self = this;
+            return ROS.get("/api/dishes", {
+              includeInactive: true,
+            })
+              .then(function (list) {
+                self.dishes = Array.isArray(list) ? list : [];
+              })
+              .catch(function (err) {
+                ROS.toast("菜品加载失败：" + ((err && err.message) || err), "error");
+              });
+          },
+
+          // —— 分类操作 / Category operations ——
+
+          /**
+           * 打开分类弹窗（编辑或新增）
+           * Open the category modal (edit or create).
+           * @param {object|null} category 分类对象，null 表示新增 / category, null for create
+           */
+          openCategoryModal: function (category) {
+            if (category) {
+              this.categoryModal = {
+                show: true,
+                id: category.id,
+                name: category.name,
+                sortOrder: category.sortOrder,
+              };
+            } else {
+              this.categoryModal = {
+                show: true,
+                id: null,
+                name: "",
+                sortOrder: this.nextCategorySortOrder(),
+              };
+            }
+          },
+
+          /**
+           * 计算新分类的默认排序号 / Compute the default sort order for a new category.
+           * @returns {number} 排序号 / sort order
+           */
+          nextCategorySortOrder: function () {
+            var max = 0;
+            this.categories.forEach(function (c) {
+              if (c.sortOrder > max) {
+                max = c.sortOrder;
+              }
+            });
+            return max + 10;
+          },
+
+          /**
+           * 关闭分类弹窗 / Close the category modal.
+           */
+          closeCategoryModal: function () {
+            this.categoryModal.show = false;
+          },
+
+          /**
+           * 保存分类（新增或更新）/ Save a category (create or update).
+           * @returns {Promise<void>} 无 / none
+           */
+          saveCategory: function () {
+            var modal = this.categoryModal;
+            if (!modal.name) {
+              ROS.toast("请填写分类名称", "warning");
+              return Promise.resolve();
+            }
+            var self = this;
+            var payload = {
+              name: modal.name,
+              sortOrder: Number(modal.sortOrder) || 0,
+            };
+            this.saving = true;
+            var request = modal.id
+              ? ROS.put("/api/categories/" + modal.id, payload)
+              : ROS.post("/api/categories", payload);
+            return request
+              .then(function () {
+                ROS.toast(modal.id ? "分类已更新" : "分类已新增", "success");
+                self.closeCategoryModal();
+                return self.loadCategories();
+              })
+              .catch(function (err) {
+                ROS.toast((err && err.message) || "保存失败", "error");
+              })
+              .then(function () {
+                self.saving = false;
+              });
+          },
+
+          /**
+           * 启用或停用分类 / Enable or disable a category.
+           * @param {object} category 分类 / category
+           * @param {boolean} active 目标状态 / target state
+           * @returns {Promise<void>} 无 / none
+           */
+          toggleCategoryActive: function (category, active) {
+            var self = this;
+            return ROS.put("/api/categories/" + category.id, { isActive: active })
+              .then(function () {
+                ROS.toast(
+                  "分类「" + category.name + "」已" + (active ? "启用" : "停用"),
+                  "success"
+                );
+                return self.loadCategories();
+              })
+              .catch(function (err) {
+                ROS.toast((err && err.message) || "操作失败", "error");
+              });
+          },
+
+          /**
+           * 删除分类二次确认 / Ask for confirmation before deleting a category.
+           * @param {object} category 分类 / category
+           */
+          confirmDeleteCategory: function (category) {
+            var self = this;
+            this.openConfirm(
+              "删除分类",
+              [
+                { k: "分类名称", v: category.name },
+                { k: "菜品数量", v: this.dishCount(category.id) + " 个" },
+                { k: "提示", v: "删除为软删除，需先移走该分类下全部菜品" },
+              ],
+              "确认删除",
+              true,
+              function () {
+                self.deleteCategory(category);
+              }
+            );
+          },
+
+          /**
+           * 执行删除分类（后端 400 时展示中文原因）
+           * Perform the category deletion, showing the backend reason on 400.
+           * @param {object} category 分类 / category
+           * @returns {Promise<void>} 无 / none
+           */
+          deleteCategory: function (category) {
+            var self = this;
+            return ROS.del("/api/categories/" + category.id)
+              .then(function () {
+                ROS.toast("分类已删除", "success");
+                return self.loadAll();
+              })
+              .catch(function (err) {
+                var type = err && err.status === 400 ? "warning" : "error";
+                ROS.toast((err && err.message) || "删除失败", type);
+              });
+          },
+
+          // —— 菜品操作 / Dish operations ——
+
+          /**
+           * 打开菜品弹窗（编辑或新增）
+           * Open the dish modal (edit or create).
+           * @param {object|null} dish 菜品对象，null 表示新增 / dish, null for create
+           */
+          openDishModal: function (dish) {
+            if (dish) {
+              this.dishModal = {
+                show: true,
+                id: dish.id,
+                categoryId: dish.categoryId,
+                name: dish.name,
+                price: dish.price,
+                unit: dish.unit || "份",
+                description: dish.description || "",
+                sortOrder: dish.sortOrder,
+              };
+            } else {
+              this.dishModal = {
+                show: true,
+                id: null,
+                categoryId:
+                  this.categoryFilter !== null
+                    ? this.categoryFilter
+                    : this.defaultCategoryId(),
+                name: "",
+                price: "",
+                unit: "份",
+                description: "",
+                sortOrder: 0,
+              };
+            }
+          },
+
+          /**
+           * 新菜品的默认分类（第一个未停用分类）
+           * Default category for a new dish (the first active category).
+           * @returns {number|null} 分类 ID / category id
+           */
+          defaultCategoryId: function () {
+            return this.activeCategories.length ? this.activeCategories[0].id : null;
+          },
+
+          /**
+           * 关闭菜品弹窗 / Close the dish modal.
+           */
+          closeDishModal: function () {
+            this.dishModal.show = false;
+          },
+
+          /**
+           * 保存菜品（新增或更新，价格转为两位小数字符串）
+           * Save a dish (create or update), converting the price to a 2-decimal
+           * yuan string.
+           * @returns {Promise<void>} 无 / none
+           */
+          saveDish: function () {
+            var modal = this.dishModal;
+            if (modal.categoryId === null || modal.categoryId === undefined) {
+              ROS.toast("请选择分类", "warning");
+              return Promise.resolve();
+            }
+            if (!modal.name) {
+              ROS.toast("请填写菜名", "warning");
+              return Promise.resolve();
+            }
+            var price = toYuanString(modal.price);
+            if (price === null) {
+              ROS.toast("请填写大于 0 的价格", "warning");
+              return Promise.resolve();
+            }
+            var self = this;
+            var payload = {
+              categoryId: Number(modal.categoryId),
+              name: modal.name,
+              price: price,
+              unit: modal.unit || "份",
+              description: modal.description ? modal.description : null,
+              sortOrder: Number(modal.sortOrder) || 0,
+            };
+            this.saving = true;
+            var request = modal.id
+              ? ROS.put("/api/dishes/" + modal.id, payload)
+              : ROS.post("/api/dishes", payload);
+            return request
+              .then(function () {
+                ROS.toast(modal.id ? "菜品已更新" : "菜品已新增", "success");
+                self.closeDishModal();
+                return self.loadAll();
+              })
+              .catch(function (err) {
+                ROS.toast((err && err.message) || "保存失败", "error");
+              })
+              .then(function () {
+                self.saving = false;
+              });
+          },
+
+          /**
+           * 一键切换售罄状态 / Toggle a dish's sold-out state.
+           * @param {object} dish 菜品 / dish
+           * @returns {Promise<void>} 无 / none
+           */
+          toggleAvailability: function (dish) {
+            var self = this;
+            var next = !dish.isAvailable;
+            return ROS.patch("/api/dishes/" + dish.id + "/availability", {
+              isAvailable: next,
+            })
+              .then(function (updated) {
+                var index = self.dishes.findIndex(function (d) {
+                  return d.id === dish.id;
+                });
+                if (index >= 0) {
+                  self.dishes.splice(index, 1, updated);
+                }
+                ROS.toast(
+                  "「" + dish.name + "」已" + (next ? "恢复在售" : "标为售罄"),
+                  "success"
+                );
+              })
+              .catch(function (err) {
+                ROS.toast((err && err.message) || "操作失败", "error");
+              });
+          },
+
+          /**
+           * 删除菜品二次确认（说明为软删除）
+           * Ask for confirmation before deleting a dish (soft delete).
+           * @param {object} dish 菜品 / dish
+           */
+          confirmDeleteDish: function (dish) {
+            var self = this;
+            this.openConfirm(
+              "删除菜品",
+              [
+                { k: "菜名", v: dish.name },
+                { k: "分类", v: this.categoryName(dish.categoryId) },
+                { k: "价格", v: this.money(dish.price) },
+                { k: "提示", v: "删除后该菜品将从菜单隐藏，历史订单不受影响" },
+              ],
+              "确认删除",
+              true,
+              function () {
+                self.deleteDish(dish);
+              }
+            );
+          },
+
+          /**
+           * 执行删除菜品（软删除）/ Perform the dish soft-deletion.
+           * @param {object} dish 菜品 / dish
+           * @returns {Promise<void>} 无 / none
+           */
+          deleteDish: function (dish) {
+            var self = this;
+            return ROS.del("/api/dishes/" + dish.id)
+              .then(function () {
+                ROS.toast("菜品已删除", "success");
+                return self.loadAll();
+              })
+              .catch(function (err) {
+                ROS.toast((err && err.message) || "删除失败", "error");
+              });
+          },
+
+          /**
+           * 启用已停用菜品（撤销软删除）/ Re-enable a soft-deleted dish.
+           * @param {object} dish 菜品 / dish
+           * @returns {Promise<void>} 无 / none
+           */
+          restoreDish: function (dish) {
+            var self = this;
+            return ROS.put("/api/dishes/" + dish.id, { isActive: true })
+              .then(function () {
+                ROS.toast("菜品「" + dish.name + "」已启用", "success");
+                return self.loadAll();
+              })
+              .catch(function (err) {
+                ROS.toast((err && err.message) || "启用失败", "error");
+              });
+          },
+
+          // —— 通用确认弹窗 / Generic confirm modal ——
+
+          /**
+           * 打开通用确认弹窗 / Open the generic confirm modal.
+           * @param {string} title 标题 / title
+           * @param {Array} lines 明细行 / detail lines
+           * @param {string} confirmText 确认按钮文案 / confirm button text
+           * @param {boolean} danger 是否危险操作 / whether it is a dangerous action
+           * @param {Function} action 确认后的动作 / action to run on confirm
+           */
+          openConfirm: function (title, lines, confirmText, danger, action) {
+            pendingAction = action;
+            this.confirmModal = {
+              show: true,
+              title: title,
+              lines: lines,
+              confirmText: confirmText,
+              danger: danger,
+            };
+          },
+
+          /**
+           * 关闭通用确认弹窗 / Close the generic confirm modal.
+           */
+          closeConfirm: function () {
+            this.confirmModal.show = false;
+            pendingAction = null;
+          },
+
+          /**
+           * 执行确认动作 / Run the pending confirm action.
+           */
+          runConfirm: function () {
+            this.confirmModal.show = false;
+            var action = pendingAction;
+            pendingAction = null;
+            if (typeof action === "function") {
+              action();
+            }
+          },
+        },
+
+        /**
+         * 挂载后加载数据 / Load data after mount.
+         */
+        mounted: function () {
+          this.loadAll();
+        },
+
+        /**
+         * 监听「显示已停用分类」开关并重新加载
+         * Reload categories when the "show inactive categories" toggle changes.
+         * 菜品始终全量加载，其开关由计算属性即时过滤，无需重新请求。
+         * Dishes are always loaded in full; that toggle is filtered by a computed
+         * property, so no reload is required.
+         */
+        watch: {
+          showInactiveCategories: function () {
+            this.loadCategories();
+          },
+        },
+      }).mount("#app");
+    })();
+  </script>
+</body>
+</html>

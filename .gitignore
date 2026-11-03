@@ -1,0 +1,30 @@
+# 运行时数据 / Runtime data
+# 源码模式运行时数据位于项目根目录；此处同时兼容 backend 下的同名目录
+# Runtime data lives at the project root in source mode; backend-level
+# directories are listed too for compatibility.
+data/
+logs/
+printed/
+backend/data/
+backend/logs/
+backend/printed/
+config.json
+
+# Python 虚拟环境与缓存 / Python venv and caches
+backend/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# PyInstaller 打包中间产物 / PyInstaller build artifacts
+build/
+dist/
+*.spec
+# 但打包配置本身需要入库 / but the build config itself must be tracked
+!restaurant-ordering-system.spec
+*.manifest
+
+# 编辑器与系统文件 / Editor and OS files
+.vscode/
+.idea/
+.DS_Store

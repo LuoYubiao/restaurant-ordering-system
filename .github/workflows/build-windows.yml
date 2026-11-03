@@ -1,0 +1,59 @@
+# ============================================================================
+# build-windows.yml —— GitHub Actions 工作流：构建 Windows 免安装分发包
+# build-windows.yml -- GitHub Actions workflow: build the Windows portable package
+#
+# 为什么必须在 Windows 上构建 / Why build on Windows:
+#   PyInstaller 不支持交叉编译，.exe 的引导程序与 Python 运行时均与平台绑定，
+#   因此 Windows 产物只能由 windows-latest 运行器产出。
+#   PyInstaller cannot cross-compile: both the bootloader and the Python runtime
+#   are platform specific, so the .exe must be produced on a Windows runner.
+# ============================================================================
+name: Build Windows Package
+
+# 触发方式 / Triggers:
+#   - workflow_dispatch：在 Actions 页面手动点击运行
+#     workflow_dispatch: run manually from the Actions tab
+#   - push tags v*：打 tag 时自动出包
+#     push tags v*: build automatically when a version tag is pushed
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-windows:
+    name: Build Windows package
+    # Windows 运行器保证产出真正的 .exe / A Windows runner guarantees a real .exe
+    runs-on: windows-latest
+
+    steps:
+      # 拉取源码 / Check out the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 安装与本地一致的 Python 版本 / Install the same Python version as local
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      # 安装运行与打包依赖 / Install runtime and packaging dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      # 执行一键打包脚本（cmd 才能直接运行 .bat）/ Run the packaging script
+      - name: Build package
+        shell: cmd
+        run: scripts\build.bat
+
+      # 上传分发包 / Upload the distribution package
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: restaurant-ordering-system-windows
+          path: dist/restaurant-ordering-system-windows.zip
+          if-no-files-found: error
+          retention-days: 30
